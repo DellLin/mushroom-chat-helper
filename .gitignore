@@ -1,0 +1,6 @@
+/target
+# 這是執行檔專案(非函式庫),Cargo.lock 應該提交以確保建置可重現。
+maple_chat_filter.toml
+# 開發環境專屬的 target-dir 覆寫(繞過某個沙箱環境的長路徑限制),
+# 不該套用到其他人的機器上。
+.cargo/
