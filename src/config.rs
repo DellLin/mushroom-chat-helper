@@ -8,7 +8,8 @@ use std::path::PathBuf;
 pub struct ChannelDef {
     pub id: String,
     pub name: String,
-    /// 文字顏色 RGB。預設值為近似值,請用「吸取畫面顏色」功能校正。
+    /// 文字顏色 RGB。預設值為 2560x1440 下實測校正過的值;換版本/主題若對不上,
+    /// 用「吸取畫面顏色」功能重抓即可。
     pub color: [u8; 3],
     /// 每個色版允許的最大差值。
     pub tolerance: u8,
@@ -206,7 +207,7 @@ pub struct HotkeyDef {
 impl Default for HotkeyDef {
     fn default() -> Self {
         Self {
-            ctrl: false,
+            ctrl: true,
             alt: false,
             shift: true,
             win: false,
@@ -219,9 +220,9 @@ impl Default for HotkeyDef {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub enum AllViewMode {
     /// 顯示擷取到的全部對話截圖(不套用任何頻道過濾)。
+    #[default]
     ShowMessages,
     /// 直接隱藏聊天內容區(視窗收合到只剩工具列),讓使用者看到遊戲原始畫面。
-    #[default]
     HideChat,
 }
 
@@ -284,31 +285,38 @@ impl Default for Config {
             // 這個字串同時是視窗清單的篩選關鍵字,以及自動開始擷取的依據:啟動時
             // 若剛好有視窗標題與它完全相符,就直接開始擷取(見 ui::App::new)。
             window_title_hint: "新楓之谷：經典版".into(),
-            fps: 8,
+            fps: 12,
             roi: CHAT_ROI_2560X1440,
             gate: GateRoi::default(),
             roi_mode: RoiMode::default(),
-            custom_roi: CHAT_ROI_2560X1440,
-            custom_gate_roi: GATE_ROI_2560X1440,
+            custom_roi: CHAT_ROI_1366X768,
+            custom_gate_roi: GATE_ROI_1366X768,
             ui_font_px: 16.0,
-            image_scale: 3.0,
-            show_message_meta: false,
+            image_scale: 1.0,
+            show_message_meta: true,
             gate_auto_hide_chat: true,
-            dedup_seconds: 20,
-            // 顏色為近似預設值,務必用「頻道」分頁的色票 + 吸取畫面顏色校正。
+            dedup_seconds: 5,
+            // 以下色票是在 2560x1440 的遊戲畫面上用「吸取畫面顏色」實測校正過的值;
+            // 容差統一 20,足以吃掉抗鋸齒邊緣又不會讓相近頻道互相搶色。
             channels: vec![
                 ch("general", "一般", [255, 255, 255], 20, true),
-                ch("whisper", "密語", [118, 240, 118], 48, true),
-                ch("buddy", "好友", [255, 238, 120], 48, true),
-                ch("party", "隊伍", [160, 205, 255], 48, true),
-                ch("guild", "公會", [200, 255, 160], 40, true),
-                ch("system", "系統", [255, 175, 80], 55, true),
-                ch("mega", "廣播", [255, 150, 210], 55, false),
+                ch("whisper", "密語", [0, 255, 0], 20, true),
+                ch("buddy", "好友", [255, 153, 0], 20, true),
+                ch("party", "隊伍", [255, 153, 204], 20, true),
+                ch("guild", "公會", [224, 171, 252], 20, true),
+                ch("system", "系統", [255, 175, 175], 20, true),
+                ch("mega", "廣播", [119, 0, 66], 20, true),
             ],
             views: vec![
                 ViewDef {
                     name: "社交".into(),
-                    channels: vec!["whisper".into(), "buddy".into(), "guild".into()],
+                    channels: vec![
+                        "whisper".into(),
+                        "buddy".into(),
+                        "guild".into(),
+                        "general".into(),
+                        "party".into(),
+                    ],
                 },
                 ViewDef {
                     name: "隊伍".into(),
@@ -318,6 +326,8 @@ impl Default for Config {
             hotkey: HotkeyDef::default(),
             all_view_mode: AllViewMode::default(),
             always_on_top: false,
+            // 不寫死位置/大小:座標會綁死當初實測的螢幕,小螢幕上會開到畫面外。
+            // None 表示交給作業系統擺放,使用者搬動/縮放後才寫回設定檔。
             window_pos: None,
             window_size: None,
         }

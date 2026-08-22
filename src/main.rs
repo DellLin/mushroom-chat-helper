@@ -43,7 +43,9 @@ fn main() -> eframe::Result<()> {
     };
 
     let mut viewport = egui::ViewportBuilder::default()
-        .with_inner_size(saved_size.unwrap_or([480.0, 320.0]))
+        // 沒有存過大小時(首次啟動)開成長條:這個工具是疊在遊戲聊天列上看的,
+        // 方形視窗一開就得手動拉。932 寬在 1366x768 上也塞得下,不會開到畫面外。
+        .with_inner_size(saved_size.unwrap_or([932.0, 152.0]))
         // 留一個很小的下限,純粹避免視窗被縮到連邊框拖曳感應區都抓不到的程度;
         // 工具列本身用 horizontal_wrapped,窄的時候會自動換行,不會被裁切/遮住。
         .with_min_inner_size([260.0, 90.0])
