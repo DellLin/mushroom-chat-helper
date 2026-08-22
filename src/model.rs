@@ -2,16 +2,17 @@
 
 use chrono::{DateTime, Local};
 
-/// 頻道識別字串(對應 Config.channels[].id;"unknown" 為未分類)。
+/// 頻道識別字串(對應 Config.channels[].id)。
 pub type ChannelId = String;
 
-/// 一則已解析的聊天訊息。
+/// 一則聊天訊息:直接擷取的畫面(不做 OCR/文字辨識),只依文字顏色分類頻道。
 #[derive(Clone, Debug)]
-pub struct ChatMessage {
+pub struct ChatImage {
     pub time: DateTime<Local>,
     pub channel: ChannelId,
-    pub sender: Option<String>,
-    pub content: String,
+    pub w: u32,
+    pub h: u32,
+    pub rgba: Vec<u8>,
 }
 
 /// 擷取執行緒的目前狀態(顯示於 UI)。
@@ -24,7 +25,7 @@ pub enum CaptureState {
 
 /// UI 執行緒接收的事件。
 pub enum UiEvent {
-    Message(ChatMessage),
+    Message(ChatImage),
     /// 已縮小的全視窗預覽(RGBA),附原始 frame 尺寸供 ROI 座標換算。
     Preview {
         frame_w: u32,
@@ -33,16 +34,17 @@ pub enum UiEvent {
         h: usize,
         rgba: Vec<u8>,
     },
-    /// 校準模式下,一行文字的主色、OCR 結果,以及送進 OCR 引擎的實際畫面
-    /// (黑字白底、已放大)——方便判斷辨識錯誤是不是遮罩/裁切造成的。
-    CalibSample {
-        color: [u8; 3],
-        text: String,
-        img_w: u32,
-        img_h: u32,
-        img_rgba: Vec<u8>,
+    /// 應 UI 要求送出的單張全解析度畫面(未縮放),供「在畫面上框選 ROI」使用。
+    FullFrame {
+        w: u32,
+        h: u32,
+        rgba: Vec<u8>,
     },
     CaptureState(CaptureState),
+    /// 主畫面判斷狀態改變時送出:true = 目前在遊戲主畫面(有聊天視窗),
+    /// false = 不在(例如商城、拍賣等畫面)。啟用主畫面判斷時停用主視窗一律
+    /// 視為 true。UI 收到 false 時隱藏整個聊天視窗,收到 true 時還原顯示。
+    GateState(bool),
     Error(String),
     /// 系統層級快捷鍵被按下(切換聊天檢視用)。
     HotkeyTriggered,

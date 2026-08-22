@@ -2,7 +2,7 @@
 name = "maple-chat-filter"
 version = "0.1.0"
 edition = "2021"
-description = "新楓之谷聊天篩選工具:畫面擷取 + OCR,建立自訂對話頻道檢視"
+description = "新楓之谷聊天篩選工具:畫面擷取 + 依文字顏色分類頻道,直接顯示對話截圖"
 
 [dependencies]
 anyhow = "1"
@@ -19,16 +19,10 @@ toml = "0.8"
 version = "=0.58.0"
 features = [
     "Foundation",
-    "Foundation_Collections",
-    "Globalization",
     "Graphics",
     "Graphics_Capture",
     "Graphics_DirectX",
     "Graphics_DirectX_Direct3D11",
-    "Graphics_Imaging",
-    "Media_Ocr",
-    "Security_Cryptography",
-    "Storage_Streams",
     "Win32_Foundation",
     "Win32_Graphics_Direct3D",
     "Win32_Graphics_Direct3D11",

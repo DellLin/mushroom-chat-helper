@@ -1,7 +1,10 @@
-//! 兩層去重:文字遮罩雜湊(pre-OCR、省算力)與 OCR 後文字時間窗。
+//! 去重/節流:標記雜湊(避免重複處理未變動的畫面)、同頻道冷卻,
+//! 以及畫面去重(避免同一則訊息因背景抖動重複顯示)。
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
+
+use super::classify::mask_similarity;
 
 /// 固定容量的雜湊 LRU 集合。
 pub struct LruSet {
@@ -17,10 +20,9 @@ impl LruSet {
 
     /// 新雜湊回傳 true 並記錄;已見過回傳 false。
     pub fn insert_if_new(&mut self, h: u64) -> bool {
-        if self.set.contains(&h) {
+        if !self.set.insert(h) {
             return false;
         }
-        self.set.insert(h);
         self.order.push_back(h);
         while self.order.len() > self.cap {
             if let Some(old) = self.order.pop_front() {
@@ -31,108 +33,67 @@ impl LruSet {
     }
 }
 
-/// OCR 後文字去重:相似文字在時間窗內只放行一次。
+/// 同頻道冷卻:半透明背景造成標記微幅抖動時,避免同一則訊息在短時間內
+/// 被反覆送出。鍵是頻道標籤,所以不同頻道的訊息不會互相擋住。
+pub struct ChannelCooldown {
+    last: HashMap<u8, Instant>,
+    cooldown: Duration,
+}
+
+impl ChannelCooldown {
+    pub fn new(ms: u64) -> Self {
+        Self { last: HashMap::new(), cooldown: Duration::from_millis(ms) }
+    }
+
+    /// 該頻道已過冷卻時間回傳 true 並記錄時間。
+    pub fn allow(&mut self, label: u8) -> bool {
+        let now = Instant::now();
+        if let Some(t) = self.last.get(&label) {
+            if now.duration_since(*t) < self.cooldown {
+                return false;
+            }
+        }
+        self.last.insert(label, now);
+        true
+    }
+}
+
+/// 兩張遮罩的相似度(見 classify::mask_similarity)在此門檻以上視為同一則訊息。
+/// 同一則訊息只有反鋸齒邊緣的微幅抖動,交集/聯集比例通常很高(>0.9);
+/// 不同內容(即使字數、命中面積相近)的訊息因為實際筆劃形狀不同,重疊比例
+/// 通常遠低於此。
+const SIMILARITY_THRESHOLD: f32 = 0.55;
+
+/// 畫面去重:新畫面只跟「前一筆」畫面比對是不是同一則訊息(見
+/// classify::channel_mask_bits),不維護一段時間窗內的多筆歷史紀錄。
 ///
-/// 用模糊比對(編輯距離)而非精確字串比對——同一行文字在半透明背景抖動下,
-/// 每次重跑 OCR 讀出來的雜訊都不太一樣(例如「謝謝你」「謝謝你胸」「謝謝作」),
-/// 精確比對完全抓不到這種近似重複,時間窗拉再長也沒用。
-pub struct TextDedup {
-    recent: VecDeque<(String, Instant)>,
+/// ROI 只框住單一則對話,每次擷取範圍裡最多只有一則訊息,只要問「這一次擷取
+/// 到的畫面,跟上一次是不是同一則」就夠了。遮罩只保留該訊息所屬頻道的文字
+/// 顏色命中像素、不含背景像素,所以玩家移動、背景特效造成的畫面劇烈變動不會
+/// 影響判斷,只有文字本身真的改變才會被視為新訊息。
+pub struct ImageDedup {
+    last: Option<(Vec<u64>, Instant)>,
     window: Duration,
 }
 
-impl TextDedup {
+impl ImageDedup {
     pub fn new(window_secs: u64) -> Self {
-        Self { recent: VecDeque::new(), window: Duration::from_secs(window_secs.max(1)) }
+        Self { last: None, window: Duration::from_secs(window_secs.max(1)) }
     }
 
     pub fn set_window(&mut self, secs: u64) {
         self.window = Duration::from_secs(secs.max(1));
     }
 
-    /// 新文字(跟時間窗內任何近似文字都不像)回傳 true。
-    pub fn check_and_insert(&mut self, text: &str) -> bool {
+    /// 新遮罩(跟前一筆不像,或前一筆已經超過時間窗)回傳 true 並記錄。
+    pub fn check_and_insert(&mut self, mask: Vec<u64>) -> bool {
         let now = Instant::now();
-        let window = self.window;
-        self.recent.retain(|(_, t)| now.duration_since(*t) < window);
-
-        if self.recent.iter().any(|(s, _)| similar(s, text)) {
-            return false;
-        }
-        self.recent.push_back((text.to_string(), now));
-        while self.recent.len() > 400 {
-            self.recent.pop_front();
-        }
-        true
-    }
-}
-
-/// 過短字串差一兩個字元佔比就很大,容易誤判,設下限只對夠長的字串做模糊比對。
-const SIMILAR_MIN_LEN: usize = 4;
-/// 編輯距離佔較長字串長度的比例在此門檻以內視為同一則訊息(OCR 雜訊造成的差異)。
-const SIMILAR_RATIO: f32 = 0.35;
-
-fn similar(a: &str, b: &str) -> bool {
-    if a == b {
-        return true;
-    }
-    let la = a.chars().count();
-    let lb = b.chars().count();
-    let max_len = la.max(lb);
-    if la < SIMILAR_MIN_LEN || lb < SIMILAR_MIN_LEN {
-        return false;
-    }
-    let dist = levenshtein(a, b);
-    (dist as f32) <= (max_len as f32) * SIMILAR_RATIO
-}
-
-/// 逐字元(非 byte)編輯距離,適用中文。
-fn levenshtein(a: &str, b: &str) -> usize {
-    let a: Vec<char> = a.chars().collect();
-    let b: Vec<char> = b.chars().collect();
-    let (la, lb) = (a.len(), b.len());
-    let mut dp: Vec<usize> = (0..=lb).collect();
-    for i in 1..=la {
-        let mut prev = dp[0];
-        dp[0] = i;
-        for j in 1..=lb {
-            let temp = dp[j];
-            dp[j] = if a[i - 1] == b[j - 1] {
-                prev
-            } else {
-                1 + prev.min(dp[j]).min(dp[j - 1])
-            };
-            prev = temp;
-        }
-    }
-    dp[lb]
-}
-
-/// 同位置行的 OCR 冷卻:半透明背景造成遮罩微幅抖動時,避免同一行反覆重跑。
-pub struct BandCooldown {
-    map: HashMap<(u32, u8), Instant>,
-    cooldown: Duration,
-}
-
-impl BandCooldown {
-    pub fn new(ms: u64) -> Self {
-        Self { map: HashMap::new(), cooldown: Duration::from_millis(ms) }
-    }
-
-    /// key: (y 位置桶, 頻道標籤)。可執行回傳 true 並記錄時間。
-    pub fn allow(&mut self, y: usize, label: u8) -> bool {
-        let key = ((y / 6) as u32, label);
-        let now = Instant::now();
-        if let Some(t) = self.map.get(&key) {
-            if now.duration_since(*t) < self.cooldown {
-                return false;
-            }
-        }
-        self.map.insert(key, now);
-        if self.map.len() > 512 {
-            self.map.clear();
-        }
-        true
+        let is_repeat = self.last.as_ref().is_some_and(|(prev, t)| {
+            now.duration_since(*t) < self.window
+                && mask_similarity(prev, &mask) >= SIMILARITY_THRESHOLD
+        });
+        self.last = Some((mask, now));
+        !is_repeat
     }
 }
 
@@ -140,27 +101,72 @@ impl BandCooldown {
 mod tests {
     use super::*;
 
-    #[test]
-    fn dedup_catches_ocr_noise_variants() {
-        let mut d = TextDedup::new(60);
-        assert!(d.check_and_insert("羽薇: 這樣我就不突兀了"));
-        // OCR 雜訊造成的近似變體應該被視為重複。
-        assert!(!d.check_and_insert("羽薇: 這樣我就不突兀"));
-        assert!(!d.check_and_insert("|羽薇: 這樣我就不突兀了羽微·?"));
+    /// 建一個 n bit 的遮罩,把 [x0,x1) 這段 bit 標成命中,其餘為 0。
+    fn bits(n: usize, x0: usize, x1: usize) -> Vec<u64> {
+        let mut v = vec![0u64; n.div_ceil(64)];
+        for i in x0..x1 {
+            v[i / 64] |= 1u64 << (i % 64);
+        }
+        v
     }
 
     #[test]
-    fn dedup_allows_distinct_messages() {
-        let mut d = TextDedup::new(60);
-        assert!(d.check_and_insert("羽薇: 這樣我就不突兀了"));
-        assert!(d.check_and_insert("一號: 我很為你著想"));
+    fn lru_set_forgets_oldest_beyond_capacity() {
+        let mut lru = LruSet::new(2);
+        assert!(lru.insert_if_new(1));
+        assert!(lru.insert_if_new(2));
+        assert!(!lru.insert_if_new(1));
+        assert!(lru.insert_if_new(3)); // 塞入 3 之後 1 被擠出
+        assert!(lru.insert_if_new(1));
     }
 
     #[test]
-    fn dedup_short_strings_need_exact_match() {
-        let mut d = TextDedup::new(60);
-        assert!(d.check_and_insert("羽:"));
-        // 太短的字串不做模糊比對,避免不同短訊息被誤判成重複。
-        assert!(d.check_and_insert("羽薇:"));
+    fn channel_cooldown_is_per_channel() {
+        let mut cd = ChannelCooldown::new(60_000);
+        assert!(cd.allow(0));
+        assert!(!cd.allow(0));
+        // 另一個頻道不受影響。
+        assert!(cd.allow(1));
+    }
+
+    #[test]
+    fn image_dedup_catches_near_identical_masks() {
+        let mut d = ImageDedup::new(60);
+        let a = bits(200, 10, 50);
+        let b = bits(200, 10, 49); // 反鋸齒抖動造成的微幅差異(邊界少 1 bit)
+        assert!(d.check_and_insert(a));
+        assert!(!d.check_and_insert(b));
+    }
+
+    #[test]
+    fn image_dedup_allows_distinct_consecutive_messages() {
+        let mut d = ImageDedup::new(60);
+        // 兩則訊息命中的 bit 數(等同字數)相同,但完全不重疊——
+        // 模擬「字數相同但內容不同」的連續訊息。
+        let a = bits(200, 10, 30);
+        let b = bits(200, 60, 80);
+        assert!(d.check_and_insert(a));
+        assert!(d.check_and_insert(b));
+    }
+
+    #[test]
+    fn image_dedup_catches_a_after_returning_from_b() {
+        let mut d = ImageDedup::new(60);
+        let a = bits(200, 10, 30);
+        let b = bits(200, 60, 80);
+        assert!(d.check_and_insert(a.clone()));
+        assert!(d.check_and_insert(b));
+        // 只跟「前一筆」比,回到 a 這種內容因為前一筆是 b,會被視為新訊息。
+        assert!(d.check_and_insert(a));
+    }
+
+    #[test]
+    fn image_dedup_expires_after_window() {
+        let mut d = ImageDedup::new(0);
+        let a = bits(200, 10, 30);
+        assert!(d.check_and_insert(a.clone()));
+        std::thread::sleep(Duration::from_millis(1100));
+        // 時間窗已過期,同一遮罩應再次被視為新訊息。
+        assert!(d.check_and_insert(a));
     }
 }
