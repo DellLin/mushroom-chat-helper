@@ -17,7 +17,7 @@ use windows::Graphics::Capture::{
 use windows::Graphics::DirectX::Direct3D11::IDirect3DDevice;
 use windows::Graphics::DirectX::DirectXPixelFormat;
 use windows::Graphics::SizeInt32;
-use windows::Win32::Foundation::HWND;
+use windows::Win32::Foundation::{HMODULE, HWND};
 use windows::Win32::Graphics::Direct3D::{D3D_DRIVER_TYPE_HARDWARE, D3D_DRIVER_TYPE_WARP};
 use windows::Win32::Graphics::Direct3D11::{
     D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D,
@@ -44,32 +44,21 @@ fn init_d3d() -> anyhow::Result<D3D> {
     unsafe {
         let mut device: Option<ID3D11Device> = None;
         let mut context: Option<ID3D11DeviceContext> = None;
-        let mut result = D3D11CreateDevice(
-            None,
-            D3D_DRIVER_TYPE_HARDWARE,
-            windows::Win32::Foundation::HMODULE::default(),
-            D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-            None,
-            D3D11_SDK_VERSION,
-            Some(&mut device),
-            None,
-            Some(&mut context),
-        );
-        if result.is_err() {
-            // 硬體裝置失敗時退回 WARP 軟體算繪。
-            result = D3D11CreateDevice(
+        let mut create = |driver| {
+            D3D11CreateDevice(
                 None,
-                D3D_DRIVER_TYPE_WARP,
-                windows::Win32::Foundation::HMODULE::default(),
+                driver,
+                HMODULE::default(),
                 D3D11_CREATE_DEVICE_BGRA_SUPPORT,
                 None,
                 D3D11_SDK_VERSION,
                 Some(&mut device),
                 None,
                 Some(&mut context),
-            );
-        }
-        result?;
+            )
+        };
+        // 硬體裝置失敗時退回 WARP 軟體算繪。
+        create(D3D_DRIVER_TYPE_HARDWARE).or_else(|_| create(D3D_DRIVER_TYPE_WARP))?;
         let device = device.ok_or_else(|| anyhow::anyhow!("無法建立 D3D11 裝置"))?;
         let context = context.ok_or_else(|| anyhow::anyhow!("無法取得 D3D11 context"))?;
         let dxgi: IDXGIDevice = device.cast()?;

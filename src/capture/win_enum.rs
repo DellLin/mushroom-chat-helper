@@ -12,8 +12,7 @@ pub struct WindowInfo {
 pub fn list_windows() -> Vec<WindowInfo> {
     unsafe extern "system" fn cb(hwnd: HWND, lparam: LPARAM) -> BOOL {
         let out = &mut *(lparam.0 as *mut Vec<WindowInfo>);
-        // windows 0.58 的 BOOL 沒有 as_bool(),直接比較內含值。
-        if IsWindowVisible(hwnd).0 != 0 {
+        if IsWindowVisible(hwnd).as_bool() {
             let mut buf = [0u16; 512];
             let len = GetWindowTextW(hwnd, &mut buf);
             if len > 0 {
