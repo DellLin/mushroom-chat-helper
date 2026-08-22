@@ -1,5 +1,9 @@
 # 蘑菇聊天小幫手 (mushroom-chat-helper)
 
+[![CI](https://github.com/DellLin/mushroom-chat-helper/actions/workflows/ci.yml/badge.svg)](https://github.com/DellLin/mushroom-chat-helper/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/DellLin/mushroom-chat-helper?display_name=tag)](https://github.com/DellLin/mushroom-chat-helper/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 把遊戲聊天視窗裡「你在乎的那幾個頻道」單獨拉出來,顯示成一個可以疊在遊戲上的
 獨立小視窗。
 
@@ -16,7 +20,18 @@
 - Windows 10 1903 以上(Windows.Graphics.Capture 的需求)
 - 遊戲需使用**視窗模式或無邊框**(獨占全螢幕無法擷取)
 
-## 建置
+## 下載
+
+到 [Releases](https://github.com/DellLin/mushroom-chat-helper/releases/latest) 下載
+`mushroom-chat-helper-vX.Y.Z-windows-x64.zip`,解壓縮後直接執行裡面的 exe,不用安裝。
+
+每個 Release 都附一個 `.sha256`,想驗證檔案完整性可以:
+
+```powershell
+Get-FileHash .\mushroom-chat-helper-vX.Y.Z-windows-x64.zip -Algorithm SHA256
+```
+
+## 自行建置
 
 安裝 [Rust](https://rustup.rs)(stable),然後:
 
@@ -152,11 +167,12 @@ cargo build --release
 ## 開發
 
 ```bash
-cargo test
-cargo clippy --all-targets
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all
 ```
 
 架構、資料流與各項設計取捨請見 [ARCHITECTURE.md](ARCHITECTURE.md)。
+分支模型、commit 慣例與發版流程請見 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 授權與免責
 
