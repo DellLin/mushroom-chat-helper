@@ -15,7 +15,7 @@ use super::{filtered_windows, ColorTarget, PickMode, RoiTarget, Tab};
 
 /// 設定視窗固定的 ViewportId(同一個字串每次算出來都一樣,不用另外存狀態)。
 pub(super) fn settings_viewport_id() -> egui::ViewportId {
-    egui::ViewportId::from_hash_of("maple_chat_filter_settings")
+    egui::ViewportId::from_hash_of("mushroom_chat_helper_settings")
 }
 
 impl super::App {
@@ -38,7 +38,7 @@ impl super::App {
             settings_id,
             egui::ViewportBuilder::default()
                 .with_title(format!(
-                    "設定 — 楓之谷聊天篩選器 v{}",
+                    "設定 — 蘑菇聊天小幫手 v{}",
                     env!("CARGO_PKG_VERSION")
                 ))
                 .with_inner_size([760.0, 600.0])
@@ -646,7 +646,7 @@ impl super::App {
     fn ui_help(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
             ui.label(
-                RichText::new(format!("楓之谷聊天篩選器 v{}", env!("CARGO_PKG_VERSION")))
+                RichText::new(format!("蘑菇聊天小幫手 v{}", env!("CARGO_PKG_VERSION")))
                     .weak()
                     .small(),
             );

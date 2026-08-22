@@ -1,4 +1,4 @@
-//! 楓之谷聊天篩選器 — 進入點與執行緒編排。
+//! 蘑菇聊天小幫手 — 進入點與執行緒編排。
 //!
 //! 執行緒:
 //!   capture (WGC)  → frame channel(bounded 2,滿了丟幀)→ vision(ROI 裁切/依顏色分類)
@@ -47,7 +47,7 @@ fn main() -> eframe::Result<()> {
         // 留一個很小的下限,純粹避免視窗被縮到連邊框拖曳感應區都抓不到的程度;
         // 工具列本身用 horizontal_wrapped,窄的時候會自動換行,不會被裁切/遮住。
         .with_min_inner_size([260.0, 90.0])
-        .with_title(format!("楓之谷聊天篩選器 v{}", env!("CARGO_PKG_VERSION")))
+        .with_title(format!("蘑菇聊天小幫手 v{}", env!("CARGO_PKG_VERSION")))
         // 無工具列(無最小化/最大化/關閉鈕),疊在遊戲聊天視窗上時才不會露出裝飾邊框;
         // 結束應用程式改放進設定視窗裡。
         .with_decorations(false);
@@ -62,7 +62,7 @@ fn main() -> eframe::Result<()> {
 
     let init = ui::AppInit { cfg, interval_ms, cmd_tx, ui_rx, hotkey_tx, full_frame_req };
     eframe::run_native(
-        "楓之谷聊天篩選器",
+        "蘑菇聊天小幫手",
         options,
         Box::new(move |cc| Ok(Box::new(ui::App::new(cc, init)))),
     )

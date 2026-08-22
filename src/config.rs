@@ -1,4 +1,4 @@
-//! 設定檔:頻道色票、ROI、檢視定義。存於執行檔旁的 maple_chat_filter.toml。
+//! 設定檔:頻道色票、ROI、檢視定義。存於執行檔旁的 mushroom_chat_helper.toml。
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -335,7 +335,7 @@ pub fn config_path() -> PathBuf {
         .ok()
         .and_then(|p| p.parent().map(|d| d.to_path_buf()))
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("maple_chat_filter.toml")
+        .join("mushroom_chat_helper.toml")
 }
 
 pub fn load() -> Config {

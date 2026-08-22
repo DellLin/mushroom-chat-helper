@@ -1,4 +1,4 @@
-# 楓之谷聊天篩選器 (maple-chat-filter)
+# 蘑菇聊天小幫手 (mushroom-chat-helper)
 
 把遊戲聊天視窗裡「你在乎的那幾個頻道」單獨拉出來,顯示成一個可以疊在遊戲上的
 獨立小視窗。
@@ -24,8 +24,8 @@
 cargo build --release
 ```
 
-產出 `target/release/maple-chat-filter.exe`,單一執行檔、零外部 DLL。
-設定檔 `maple_chat_filter.toml` 會在第一次儲存設定時建立於執行檔旁邊。
+產出 `target/release/mushroom-chat-helper.exe`,單一執行檔、零外部 DLL。
+設定檔 `mushroom_chat_helper.toml` 會在第一次儲存設定時建立於執行檔旁邊。
 
 ## 快速上手
 
@@ -132,7 +132,7 @@ cargo build --release
 
 ## 設定檔
 
-設定存在執行檔旁的 `maple_chat_filter.toml`,按各分頁的「💾 儲存設定」或結束
+設定存在執行檔旁的 `mushroom_chat_helper.toml`,按各分頁的「💾 儲存設定」或結束
 程式時寫入。刪掉這個檔案就會回到出廠預設值。
 
 主要欄位:

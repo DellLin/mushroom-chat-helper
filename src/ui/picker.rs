@@ -14,7 +14,7 @@ use super::{ColorTarget, PickMode, RoiTarget};
 
 /// 全螢幕畫面擷取工具視窗固定的 ViewportId。
 fn screen_picker_viewport_id() -> egui::ViewportId {
-    egui::ViewportId::from_hash_of("maple_chat_filter_screen_picker")
+    egui::ViewportId::from_hash_of("mushroom_chat_helper_screen_picker")
 }
 
 impl super::App {

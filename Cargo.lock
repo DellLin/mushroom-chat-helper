@@ -1946,22 +1946,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "maple-chat-filter"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "crossbeam-channel",
- "eframe",
- "egui",
- "env_logger",
- "log",
- "serde",
- "toml",
- "windows 0.58.0",
-]
-
-[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2018,6 +2002,22 @@ checksum = "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b"
 dependencies = [
  "num-traits",
  "pxfm",
+]
+
+[[package]]
+name = "mushroom-chat-helper"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "crossbeam-channel",
+ "eframe",
+ "egui",
+ "env_logger",
+ "log",
+ "serde",
+ "toml",
+ "windows 0.58.0",
 ]
 
 [[package]]
