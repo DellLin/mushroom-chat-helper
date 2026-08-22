@@ -41,7 +41,7 @@ jobs:
           "version=$($tag.Substring(1))" >> $env:GITHUB_OUTPUT
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ steps.tag.outputs.tag }}
           fetch-depth: 0   # --generate-notes 需要完整歷史
@@ -50,8 +50,10 @@ jobs:
       - name: Verify Cargo.toml version matches tag
         shell: pwsh
         run: |
-          $cargoVersion = (Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"(.+)"' |
-            Select-Object -First 1).Matches[0].Groups[1].Value
+          # 用 cargo metadata 取版號,不要用正規表示式掃 Cargo.toml ——
+          # [dependencies.windows] 底下也有一行 version =,會抓錯。
+          $cargoVersion = (cargo metadata --no-deps --format-version 1 |
+            ConvertFrom-Json).packages[0].version
           $tagVersion = '${{ steps.tag.outputs.version }}'
           Write-Host "Cargo.toml = $cargoVersion / tag = $tagVersion"
           if ($cargoVersion -ne $tagVersion) {
@@ -80,7 +82,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path "dist/$name" | Out-Null
           Copy-Item target/release/mushroom-chat-helper.exe "dist/$name/"
           Copy-Item README.md, LICENSE                      "dist/$name/"
-          Compress-Archive -Path "dist/$name/*" -DestinationPath "dist/$name.zip"
+          # 壓資料夾本身(不是 /*),解開來才會是一個乾淨的資料夾
+          Compress-Archive -Path "dist/$name" -DestinationPath "dist/$name.zip"
 
           # 讓使用者可以驗證下載的檔案沒有被動過
           $hash = (Get-FileHash "dist/$name.zip" -Algorithm SHA256).Hash.ToLower()
@@ -99,12 +102,16 @@ jobs:
           gh release view $tag *> $null
           $exists = ($LASTEXITCODE -eq 0)
           $ErrorActionPreference = 'Stop'
+          # PowerShell 不會幫原生執行檔展開萬用字元,gh 會收到字面上的
+          # "dist/*.zip" 而找不到檔案 —— 這裡先自己展開再用陣列展開傳進去。
+          $assets = @(Get-ChildItem -Path dist/*.zip, dist/*.sha256 |
+            ForEach-Object { $_.FullName })
+          if ($assets.Count -eq 0) { Write-Error "找不到要上傳的檔案"; exit 1 }
+          Write-Host "上傳:$($assets -join ', ')"
+
           if ($exists) {
             Write-Host "Release $tag 已存在,覆寫附件"
-            gh release upload $tag dist/*.zip dist/*.sha256 --clobber
+            gh release upload $tag @assets --clobber
           } else {
-            gh release create $tag dist/*.zip dist/*.sha256 `
-              --title "$tag" `
-              --generate-notes `
-              --verify-tag
+            gh release create $tag @assets --title "$tag" --generate-notes --verify-tag
           }

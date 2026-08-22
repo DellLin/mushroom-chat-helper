@@ -42,6 +42,18 @@ feat/*  fix/*  docs/*  refactor/*   ← 實際開發在這裡,從 develop 開出
 - **不要直接推 `main`**,`main` 只透過 PR 從 `develop` 合併進來。
 - 不要自作主張打 tag 或發 Release,那等於對外發版 —— 先問過使用者。
 
+### main 的分支保護
+
+GitHub 上 `main` 已設保護規則:
+
+- 要合併必須開 PR(不需要他人核准,單人開發不會卡住)
+- CI 的 `Lint / Test / Build (windows)` 必須綠燈
+- 禁止 force push、禁止刪除分支
+- **admin 不受限** —— 使用者本人緊急時仍可直接推 `main`。這是刻意留的逃生門,
+  不是「可以隨便直推」的意思,平常照 PR 流程走。
+
+`develop` 沒有保護規則,可以直接推。
+
 ### Commit message
 
 Conventional Commits,主旨用繁體中文(跟既有歷史一致):
@@ -79,6 +91,16 @@ refactor(capture): 精簡 D3D11 裝置建立
    與 `.sha256`。
 
 版號依 SemVer:破壞性變更改 MAJOR、新功能改 MINOR、修 bug 改 PATCH。
+
+## 工具鏈版本
+
+**CI 用的是當下最新的 stable rustc(runner 預裝),本機可能落後。**
+實際踩過:本機 1.95 編得過,CI 的 1.97.1 因為 future-compat lint
+(`f32: From<f64>` 回退)直接編譯失敗。動到程式碼前先確認版本一致:
+
+```bash
+rustup update stable
+```
 
 ## 注意事項
 
