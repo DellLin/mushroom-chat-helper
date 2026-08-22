@@ -349,7 +349,7 @@ impl super::App {
                             ui.painter().rect_stroke(
                                 rect,
                                 egui::Rounding::ZERO,
-                                egui::Stroke::new(2.0, Color32::YELLOW),
+                                egui::Stroke::new(2.0_f32, Color32::YELLOW),
                             );
                             if resp.drag_stopped() {
                                 let x0 = ((rect.min.x - origin.x).max(0.0) * to_frame) as u32;
@@ -392,7 +392,7 @@ impl super::App {
                     ui.painter().rect_stroke(
                         r,
                         egui::Rounding::ZERO,
-                        egui::Stroke::new(2.0, Color32::LIGHT_GREEN),
+                        egui::Stroke::new(2.0_f32, Color32::LIGHT_GREEN),
                     );
                 }
                 if cfg.gate.roi.w > 0 {
@@ -404,7 +404,7 @@ impl super::App {
                     ui.painter().rect_stroke(
                         r,
                         egui::Rounding::ZERO,
-                        egui::Stroke::new(2.0, Color32::from_rgb(255, 140, 60)),
+                        egui::Stroke::new(2.0_f32, Color32::from_rgb(255, 140, 60)),
                     );
                 }
             } else {

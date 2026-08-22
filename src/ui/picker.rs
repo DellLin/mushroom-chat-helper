@@ -162,7 +162,7 @@ impl super::App {
                                 ui.painter().rect_stroke(
                                     rect,
                                     egui::Rounding::ZERO,
-                                    egui::Stroke::new(2.0, Color32::YELLOW),
+                                    egui::Stroke::new(2.0_f32, Color32::YELLOW),
                                 );
                                 ui.painter().circle_filled(
                                     to_screen(start_fc),
@@ -291,7 +291,7 @@ pub(super) fn color_picker_rgb(ui: &mut egui::Ui, id_salt: impl std::hash::Hash,
     if ui.is_rect_visible(rect) {
         let c = Color32::from_rgb(color[0], color[1], color[2]);
         ui.painter().rect_filled(rect, 2.0, c);
-        ui.painter().rect_stroke(rect, 2.0, egui::Stroke::new(1.0, Color32::from_gray(90)));
+        ui.painter().rect_stroke(rect, 2.0, egui::Stroke::new(1.0_f32, Color32::from_gray(90)));
     }
 
     let popup_id = ui.make_persistent_id(id_salt);
@@ -326,7 +326,7 @@ pub(super) fn color_picker_rgb(ui: &mut egui::Ui, id_salt: impl std::hash::Hash,
 /// 貫穿全螢幕的十字準心:系統游標在全螢幕無邊框視窗上常常看不到,自己畫
 /// 一條水平線+一條垂直線通過滑鼠位置取代,順便比系統游標更容易對齊像素邊界。
 fn draw_crosshair(painter: &egui::Painter, screen: egui::Rect, cursor: egui::Pos2) {
-    let stroke = egui::Stroke::new(1.0, Color32::from_rgb(0, 255, 140));
+    let stroke = egui::Stroke::new(1.0_f32, Color32::from_rgb(0, 255, 140));
     painter.line_segment(
         [egui::pos2(screen.min.x, cursor.y), egui::pos2(screen.max.x, cursor.y)],
         stroke,
@@ -335,7 +335,7 @@ fn draw_crosshair(painter: &egui::Painter, screen: egui::Rect, cursor: egui::Pos
         [egui::pos2(cursor.x, screen.min.y), egui::pos2(cursor.x, screen.max.y)],
         stroke,
     );
-    painter.circle_stroke(cursor, 3.0, egui::Stroke::new(1.5, Color32::WHITE));
+    painter.circle_stroke(cursor, 3.0, egui::Stroke::new(1.5_f32, Color32::WHITE));
 }
 
 /// 放大鏡每格(取樣自畫面的一個像素)在螢幕上畫出的邊長,單位:egui point。
@@ -406,7 +406,7 @@ fn draw_magnifier(
         ),
         egui::vec2(MAG_CELL, MAG_CELL),
     );
-    painter.rect_stroke(center_rect, 0.0, egui::Stroke::new(1.5, Color32::RED));
+    painter.rect_stroke(center_rect, 0.0, egui::Stroke::new(1.5_f32, Color32::RED));
 
     painter.text(
         egui::pos2(grid_min.x, grid_min.y + grid_size.y + 6.0),
@@ -418,7 +418,7 @@ fn draw_magnifier(
     let rgb_row_y = grid_min.y + grid_size.y + text_h + 8.0;
     let swatch = egui::Rect::from_min_size(egui::pos2(grid_min.x, rgb_row_y + 2.0), egui::vec2(14.0, 14.0));
     painter.rect_filled(swatch, 2.0, center_color);
-    painter.rect_stroke(swatch, 2.0, egui::Stroke::new(1.0, Color32::from_gray(120)));
+    painter.rect_stroke(swatch, 2.0, egui::Stroke::new(1.0_f32, Color32::from_gray(120)));
     painter.text(
         egui::pos2(swatch.max.x + 6.0, rgb_row_y),
         egui::Align2::LEFT_TOP,
