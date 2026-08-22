@@ -1,0 +1,24 @@
+version: 2
+updates:
+  # Rust 相依套件
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    target-branch: develop
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # 把小版本更新合成一個 PR,避免每週一堆零碎 PR
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  # GitHub Actions 自己的版本
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    target-branch: develop
+    commit-message:
+      prefix: "chore(ci)"

@@ -1,0 +1,110 @@
+name: Release
+
+# 推一個 vX.Y.Z 的 tag 就會建置並發佈 Release。
+# 例:git tag v0.1.0 && git push origin v0.1.0
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要重新發佈的 tag(例:v0.1.0),該 tag 必須已經存在'
+        required: true
+        type: string
+
+permissions:
+  contents: write   # 建立 Release / 上傳檔案需要
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    name: Build and publish Windows release
+    runs-on: windows-latest
+
+    steps:
+      - name: Resolve tag
+        id: tag
+        shell: pwsh
+        run: |
+          $tag = if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            '${{ inputs.tag }}'
+          } else {
+            '${{ github.ref_name }}'
+          }
+          if ($tag -notmatch '^v\d+\.\d+\.\d+') {
+            Write-Error "tag 格式不對: $tag (需要 vX.Y.Z)"
+            exit 1
+          }
+          "tag=$tag"                     >> $env:GITHUB_OUTPUT
+          "version=$($tag.Substring(1))" >> $env:GITHUB_OUTPUT
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+          fetch-depth: 0   # --generate-notes 需要完整歷史
+
+      # tag 與 Cargo.toml 版本不一致通常代表忘了改版號,先擋下來比較好。
+      - name: Verify Cargo.toml version matches tag
+        shell: pwsh
+        run: |
+          $cargoVersion = (Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"(.+)"' |
+            Select-Object -First 1).Matches[0].Groups[1].Value
+          $tagVersion = '${{ steps.tag.outputs.version }}'
+          Write-Host "Cargo.toml = $cargoVersion / tag = $tagVersion"
+          if ($cargoVersion -ne $tagVersion) {
+            Write-Error "版本不一致:Cargo.toml 是 $cargoVersion,tag 是 $tagVersion。請先更新 Cargo.toml 再重打 tag。"
+            exit 1
+          }
+
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Test
+        run: cargo test --all
+
+      - name: Build (release)
+        run: cargo build --release --locked
+
+      - name: Package
+        id: package
+        shell: pwsh
+        run: |
+          $tag  = '${{ steps.tag.outputs.tag }}'
+          $name = "mushroom-chat-helper-$tag-windows-x64"
+          New-Item -ItemType Directory -Force -Path "dist/$name" | Out-Null
+          Copy-Item target/release/mushroom-chat-helper.exe "dist/$name/"
+          Copy-Item README.md, LICENSE                      "dist/$name/"
+          Compress-Archive -Path "dist/$name/*" -DestinationPath "dist/$name.zip"
+
+          # 讓使用者可以驗證下載的檔案沒有被動過
+          $hash = (Get-FileHash "dist/$name.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  $name.zip" | Out-File -Encoding ascii "dist/$name.zip.sha256"
+          Write-Host "SHA256: $hash"
+          "zip=dist/$name.zip" >> $env:GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ steps.tag.outputs.tag }}'
+          # 已存在就只更新附件,方便重跑 workflow_dispatch
+          $ErrorActionPreference = 'Continue'
+          gh release view $tag *> $null
+          $exists = ($LASTEXITCODE -eq 0)
+          $ErrorActionPreference = 'Stop'
+          if ($exists) {
+            Write-Host "Release $tag 已存在,覆寫附件"
+            gh release upload $tag dist/*.zip dist/*.sha256 --clobber
+          } else {
+            gh release create $tag dist/*.zip dist/*.sha256 `
+              --title "$tag" `
+              --generate-notes `
+              --verify-tag
+          }

@@ -4,3 +4,6 @@ mushroom_chat_helper.toml
 # 開發環境專屬的 target-dir 覆寫(繞過某個沙箱環境的長路徑限制),
 # 不該套用到其他人的機器上。
 .cargo/
+
+# Claude Code 的本機設定(每台機器不同,不該共用)
+.claude/settings.local.json

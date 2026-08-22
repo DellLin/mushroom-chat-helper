@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+# 同一個分支/PR 有新的 push 時,取消還在跑的舊流程,省 runner 時間。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Lint / Test / Build (windows)
+    # 本專案綁定 Windows.Graphics.Capture 與 Win32 API,只能在 Windows runner 上建置。
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          rustup show active-toolchain
+          rustc --version
+          cargo --version
+
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+
+      # -D warnings 只加在 clippy 上(不用全域 RUSTFLAGS),
+      # 否則相依套件自己的警告也會讓整個建置失敗。
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Test
+        run: cargo test --all
+
+      - name: Build (release)
+        run: cargo build --release --locked
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mushroom-chat-helper-${{ github.sha }}
+          path: target/release/mushroom-chat-helper.exe
+          if-no-files-found: error
+          retention-days: 14
