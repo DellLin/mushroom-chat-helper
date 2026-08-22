@@ -9,7 +9,7 @@ anyhow = "1"
 chrono = "0.4"
 crossbeam-channel = "0.5"
 eframe = "0.29"
-egui = "0.29"
+egui = "0.36"
 log = "0.4"
 env_logger = "0.11"
 serde = { version = "1", features = ["derive"] }
