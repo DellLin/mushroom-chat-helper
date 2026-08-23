@@ -1,0 +1,25 @@
+<!-- 16/24 專用:粗線條、少細節。斑點減為 2 顆、對話框尾巴加寬、留白壓到最小。 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- 蘑菇 -->
+  <path fill="#EFD3A8" stroke="#2B1E17" stroke-width="16" stroke-linejoin="round"
+        d="M60,142 H130 V200 a30,30 0 0 1 -30,30 H90 a30,30 0 0 1 -30,-30 Z"/>
+  <path fill="#E24A1E" stroke="#2B1E17" stroke-width="16" stroke-linejoin="round"
+        d="M10,150 a85,88 0 0 1 170,0 a12,12 0 0 1 -12,12 H22 a12,12 0 0 1 -12,-12 Z"/>
+  <g fill="#FFF1DC">
+    <ellipse cx="66"  cy="104" rx="26" ry="20"/>
+    <ellipse cx="134" cy="126" rx="20" ry="16"/>
+  </g>
+  <g fill="#2B1E17">
+    <ellipse cx="79"  cy="186" rx="11" ry="16"/>
+    <ellipse cx="113" cy="186" rx="11" ry="16"/>
+  </g>
+  <!-- 對話框:尾巴加寬,點加大 -->
+  <path fill="#FFFFFF" stroke="#2B1E17" stroke-width="16" stroke-linejoin="round"
+        d="M156,10 H236 a16,16 0 0 1 16,16 V84 a16,16 0 0 1 -16,16 H200
+           L166,132 L176,100 H156 a16,16 0 0 1 -16,-16 V26 a16,16 0 0 1 16,-16 Z"/>
+  <g fill="#2B1E17">
+    <circle cx="172" cy="55" r="11"/>
+    <circle cx="200" cy="55" r="11"/>
+    <circle cx="228" cy="55" r="11"/>
+  </g>
+</svg>

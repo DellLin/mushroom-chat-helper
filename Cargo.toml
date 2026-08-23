@@ -48,6 +48,12 @@ features = [
     "Win32_UI_Input_KeyboardAndMouse",
 ]
 
+[build-dependencies]
+# 把 assets/icon.ico 嵌成 exe 的圖示資源(檔案總管/捷徑看到的那個)。
+winresource = "0.1"
+# 建置期把 icon-256.png 解成 RGBA,執行期就不用背一個 PNG 解碼器。
+png = "0.18"
+
 [profile.release]
 opt-level = 3
 lto = "thin"
