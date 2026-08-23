@@ -8,8 +8,8 @@ description = "蘑菇聊天小幫手:新楓之谷畫面擷取 + 依文字顏色�
 anyhow = "1"
 chrono = "0.4"
 crossbeam-channel = "0.5"
-eframe = "0.29"
-egui = "0.29"
+eframe = "0.36"
+egui = "0.36"
 log = "0.4"
 env_logger = "0.11"
 serde = { version = "1", features = ["derive"] }

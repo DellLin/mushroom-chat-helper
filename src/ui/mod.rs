@@ -345,7 +345,7 @@ impl App {
 fn apply_ui_font_scale(ctx: &egui::Context, base_px: f32) {
     use egui::{FontId, TextStyle};
     let base = base_px.clamp(8.0, 40.0);
-    ctx.style_mut(|style| {
+    ctx.all_styles_mut(|style| {
         style.text_styles = [
             (TextStyle::Small, FontId::proportional(base * 0.75)),
             (TextStyle::Body, FontId::proportional(base)),
@@ -358,7 +358,12 @@ fn apply_ui_font_scale(ctx: &egui::Context, base_px: f32) {
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    // eframe 0.36 把 App::update(ctx) 換成 App::ui(ui):面板不再掛在 Context
+    // 上,而是疊在這個 root Ui 裡。需要 Context 的地方(視窗命令、輸入、樣式)
+    // 從 ui.ctx() 取,先 clone 一份避免跟後面對 ui 的可變借用打架。
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+        let ctx = &ctx;
         self.drain_events(ctx);
         ctx.request_repaint_after(std::time::Duration::from_millis(250));
 
@@ -377,12 +382,15 @@ impl eframe::App for App {
 
         // 一個 viewport 一個方法。順序有意義:主視窗的面板要先堆好,
         // 兩個 show_viewport_immediate 才接在後面。
-        self.ui_chat_window(ctx);
+        // 主視窗的面板疊在 root Ui 裡;另外兩個是各自獨立的作業系統視窗,
+        // 用 Context 開自己的 viewport,不需要(也不該)碰到 root Ui。
+        self.ui_chat_window(ui);
         self.ui_settings_window(ctx);
         self.ui_screen_picker(ctx);
     }
 
-    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+    // 0.36 的預設後端從 glow 換成 wgpu,on_exit 也就不再收 glow context。
+    fn on_exit(&mut self) {
         config::save(&self.cfg.read().unwrap());
         let _ = self.cmd_tx.send(CaptureCmd::Shutdown);
         let _ = self.hotkey_tx.send(HotkeyCmd::Shutdown);
@@ -413,7 +421,7 @@ fn install_cjk_fonts(ctx: &egui::Context) -> bool {
     for path in candidates {
         if let Ok(bytes) = std::fs::read(path) {
             let mut fonts = egui::FontDefinitions::default();
-            fonts.font_data.insert("cjk".into(), egui::FontData::from_owned(bytes));
+            fonts.font_data.insert("cjk".into(), std::sync::Arc::new(egui::FontData::from_owned(bytes)));
             for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
                 fonts.families.entry(family).or_default().push("cjk".into());
             }

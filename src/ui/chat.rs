@@ -12,27 +12,28 @@ use super::settings::settings_viewport_id;
 impl super::App {
     /// 畫出整個主視窗。這裡的順序等同面板的堆疊順序,不要隨意調換:視窗命令要
     /// 在任何面板之前送出,提示條疊在工具列上面,訊息列表才吃掉剩下的空間。
-    pub(super) fn ui_chat_window(&mut self, ctx: &egui::Context) {
-        self.sync_gate_visibility(ctx);
-        self.ui_banners(ctx);
+    pub(super) fn ui_chat_window(&mut self, ui: &mut egui::Ui) {
+        let ctx = ui.ctx().clone();
+        self.sync_gate_visibility(&ctx);
+        self.ui_banners(ui);
 
         // 主視窗永遠只顯示聊天,大小/字級才能貼著遊戲聊天視窗調整、疊上去用。
         // 所有設定都收在另一個獨立的作業系統視窗裡,按 ⚙ 才會打開。
         let toolbar_resp =
-            egui::TopBottomPanel::top("chat_toolbar").show(ctx, |ui| self.ui_chat_toolbar(ui));
+            egui::Panel::top("chat_toolbar").show(ui, |ui| self.ui_chat_toolbar(ui));
         let toolbar_h = toolbar_resp.response.rect.height();
 
-        let want_collapsed = self.sync_chat_collapse(ctx, toolbar_h);
-        self.remember_window_geometry(ctx);
+        let want_collapsed = self.sync_chat_collapse(&ctx, toolbar_h);
+        self.remember_window_geometry(&ctx);
 
         if !want_collapsed {
-            egui::CentralPanel::default().show(ctx, |ui| self.ui_chat_messages(ui));
+            egui::CentralPanel::default().show(ui, |ui| self.ui_chat_messages(ui));
         }
 
         // 主視窗無邊框,少了系統內建的邊緣拖曳縮放,補上手動的邊框/角落感應區。
         // 鎖定時不裝這些感應區,滑鼠移過去也不會顯示縮放游標,明確表示目前不能調整。
         if !self.window_locked {
-            install_resize_border(ctx);
+            install_resize_border(&ctx);
         }
     }
 
@@ -60,9 +61,9 @@ impl super::App {
     }
 
     /// 疊在工具列上方的提示條:找不到中文字型的警告,以及最近一則錯誤訊息。
-    fn ui_banners(&mut self, ctx: &egui::Context) {
+    fn ui_banners(&mut self, ui: &mut egui::Ui) {
         if !self.font_ok {
-            egui::TopBottomPanel::top("font_warn").show(ctx, |ui| {
+            egui::Panel::top("font_warn").show(ui, |ui| {
                 ui.label(
                     RichText::new("找不到系統中文字型(msjh.ttc),中文可能顯示為方框")
                         .color(Color32::YELLOW),
@@ -70,7 +71,7 @@ impl super::App {
             });
         }
         if let Some(err) = self.last_error.clone() {
-            egui::TopBottomPanel::top("err").show(ctx, |ui| {
+            egui::Panel::top("err").show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new(&err).color(Color32::LIGHT_RED));
                     if ui.button("✕").clicked() {
@@ -90,7 +91,7 @@ impl super::App {
             matches!(self.cfg.read().unwrap().all_view_mode, AllViewMode::HideChat);
         let want_collapsed = self.active_view.is_none() && hide_chat_on_all;
         if want_collapsed != self.chat_collapsed {
-            let screen = ctx.input(|i| i.screen_rect());
+            let screen = ctx.input(|i| i.viewport_rect());
             if want_collapsed {
                 self.saved_height = screen.height();
                 ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
@@ -276,7 +277,7 @@ fn install_resize_border(ctx: &egui::Context) {
     // 只留右邊/下面/右下角可以拖曳縮放——上面跟左邊拿掉,避免點選聊天工具列
     // (在視窗最上方)時不小心誤觸縮放感應區。
     const T: f32 = 8.0;
-    let s = ctx.screen_rect();
+    let s = ctx.viewport_rect();
 
     let regions: [(&str, egui::Rect, R, C); 3] = [
         (
