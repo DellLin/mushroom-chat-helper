@@ -17,6 +17,7 @@ mod settings;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, RwLock};
+use std::time::Instant;
 
 use crossbeam_channel::{Receiver, Sender};
 
@@ -166,6 +167,11 @@ pub struct App {
     chat_hidden_by_gate: bool,
     /// 搬到螢幕外之前記住的視窗位置,還原時用。
     pos_before_gate_hide: Option<[f32; 2]>,
+    /// 程式啟動的時間點。啟動後一小段時間內不套用主畫面判斷的自動隱藏,
+    /// 「重開一次就看得到視窗」永遠是可行的退路(見 chat::sync_gate_visibility)。
+    started_at: Instant,
+    /// 是否已經做過「視窗真的生在看得到的地方嗎」的開機檢查(只做一次)。
+    window_pos_checked: bool,
 
     /// 上一次套用到 egui 全域文字樣式的 ui_font_px,值沒變就不用重算/重設 style。
     applied_font_px: f32,
@@ -216,6 +222,8 @@ impl App {
             gate_open: true,
             chat_hidden_by_gate: false,
             pos_before_gate_hide: None,
+            started_at: Instant::now(),
+            window_pos_checked: false,
             applied_font_px: -1.0,
         };
 

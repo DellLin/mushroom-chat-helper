@@ -24,7 +24,7 @@ pub struct ViewDef {
 }
 
 /// 聊天區域(視窗內像素座標)。
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Roi {
     pub x: u32,
     pub y: u32,
@@ -169,7 +169,7 @@ impl Default for RoiMode {
 /// 主畫面判斷範圍(ROI 判斷視窗):偵測目前畫面是否在遊戲主畫面(有聊天視窗)。
 /// 使用者進入商城、拍賣等其他畫面時該範圍內不會出現指定顏色,藉此避免
 /// 持續套用聊天判斷邏輯而在這些畫面上誤判出訊息。
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GateRoi {
     /// 是否啟用主畫面判斷。

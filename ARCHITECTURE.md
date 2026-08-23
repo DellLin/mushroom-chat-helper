@@ -91,6 +91,14 @@ vision 執行緒同時負責兩種給 UI 看的畫面:每 500ms 一張縮小的�
 建立初始 `ViewportBuilder`(`with_position`/`with_inner_size`);沒有記錄過就
 退回寫死的預設值跟作業系統決定的位置。
 
+位置另外要過 `desktop::pos_is_reachable`(視窗左上角有沒有落在虛擬桌面內)這關,
+寫回設定檔前擋一次、啟動還原時擋一次、從自動隱藏搬回來時再擋一次。光靠上面那個
+`chat_hidden_by_gate` 旗標不夠:送出「搬回原位」的那一幀,`inner_rect` 讀到的還是
+搬走前的螢幕外座標(視窗命令下一幀才生效),照寫就會把 `-32000` 存進設定檔,
+下次啟動視窗直接生在看不見的地方。第一幀還會由 `ui/chat.rs` 的
+`ensure_window_reachable` 用實際的 `pixels_per_point` 再精準檢查一次,不合格就
+直接搬回桌面左上角——設定檔可能是舊版本存壞的,上次用的那台螢幕也可能拔掉了。
+
 **「視窗置頂」同步到設定視窗**:設定視窗的 `ViewportBuilder` 每幀都用目前的
 `always_on_top` 重建(`with_window_level`),不需要自己額外判斷「值有沒有變」
 ——egui 內部的 `ViewportBuilder::patch` 本來就會跟上一幀的 builder 比較,
@@ -106,8 +114,23 @@ vision 執行緒同時負責兩種給 UI 看的畫面:每 500ms 一張縮小的�
 UI 收到 `false` 且使用者有開「自動隱藏」時,會把主視窗整個搬到螢幕座標範圍外
 (`OuterPosition(-32000, -32000)`),回到主畫面時再搬回原位。刻意不用
 `ViewportCommand::Visible` 隱藏視窗——實測隱藏後 winit 不會再收到重繪機會,
-視窗就再也叫不回來了。擷取停止或失敗時強制視為「在主畫面」,避免視窗卡在螢幕
-外面找不回來。
+視窗就再也叫不回來了。
+
+### 自動隱藏一定要解得開
+
+「搬到螢幕外」這招的代價是:只要 `true` 那一次沒送出去,視窗就永遠留在外面。
+`false` 是很容易變成永久狀態的——判斷顏色沒校正好、換了解析度、遊戲關掉之後
+根本不會再有畫面可以判斷。所以隱藏這條路上疊了四道各自獨立的保險:
+
+| 保險 | 位置 | 擋掉的情況 |
+|---|---|---|
+| 判斷要先自己證明過一次 | `vision::GateReporter` | 判斷顏色/範圍沒校正好,`false` 從頭到尾不會翻身。至少真的看過一次「在主畫面」,之後的 `false` 才算數;沒看過就一律回報 `true`(該跳過的畫面照樣跳過,只是不隱藏視窗) |
+| 畫面斷流看門狗 | `vision`(`recv_timeout`,見 `FRAME_IDLE_TIMEOUT`) | 擷取的遊戲關掉/最小化/擷取卡住——沒有畫面就等不到下一次狀態改變。超時就補送一次 `true`,並忘掉確認狀態,畫面回來時重新確認 |
+| 擷取目標關閉事件 | `capture/wgc.rs`(`GraphicsCaptureItem::Closed`) | WGC 在目標視窗關閉時只是安靜地不再送畫面、不回報錯誤。收到事件就自己下 `CaptureCmd::Stop`,UI 收到非 `Running` 狀態就把 `gate_open` 強制設回 `true` |
+| 啟動寬限期 | `ui/chat.rs`(`GATE_STARTUP_GRACE`) | 上面三道都失守時的最後退路:剛啟動的前幾秒一律不隱藏,「關掉重開」永遠看得到視窗 |
+
+再加上視窗位置本身的保護(見上一節與 `desktop.rs`):螢幕外的座標永遠不會被
+寫回設定檔,啟動時也會再檢查一次視窗是不是真的生在桌面上。
 
 ## ROI 設定:一般 / 進階
 
@@ -232,9 +255,10 @@ egui 的鍵盤事件只在應用程式視窗有焦點時才收得到,但這個�
 | `main.rs` | 執行緒編排、channel 建立、主視窗初始化 |
 | `model.rs` | 執行緒間的訊息/指令型別 |
 | `config.rs` | TOML 設定持久化、各解析度實測 ROI 常數 |
+| `desktop.rs` | 虛擬桌面範圍查詢、「這個視窗位置還叫得回來嗎」判斷 |
 | `capture/wgc.rs` | WGC 擷取執行緒、D3D11 讀回 |
 | `capture/win_enum.rs` | 可見視窗列舉 |
-| `vision/mod.rs` | 管線編排:主畫面判斷 → ROI 裁切 → 標記 → 分類 → 去重 → 送出畫面 |
+| `vision/mod.rs` | 管線編排:主畫面判斷 → ROI 裁切 → 標記 → 分類 → 去重 → 送出畫面;主畫面判斷的回報規則(`GateReporter`)與畫面斷流看門狗 |
 | `vision/classify.rs` | 色票(含動態亮度門檻)、像素標記、主色統計、頻道遮罩與 IoU 比對 |
 | `vision/dedup.rs` | 標記雜湊 LRU / 同頻道冷卻 / 畫面去重時間窗(ImageDedup) |
 | `hotkey.rs` | 系統層級全域快捷鍵(RegisterHotKey)執行緒 |
