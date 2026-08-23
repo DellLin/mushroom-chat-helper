@@ -293,7 +293,7 @@ impl Default for Config {
             custom_gate_roi: GATE_ROI_1366X768,
             ui_font_px: 16.0,
             image_scale: 1.0,
-            show_message_meta: true,
+            show_message_meta: false,
             gate_auto_hide_chat: true,
             dedup_seconds: 5,
             // 以下色票是在 2560x1440 的遊戲畫面上用「吸取畫面顏色」實測校正過的值;
