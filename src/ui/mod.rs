@@ -9,10 +9,13 @@
 //!
 //! 子模組各自用 `impl super::App` 補上自己的方法,所以三邊共用同一份狀態,
 //! 不必再多一層 context 物件轉手。
+//!
+//! [`update`] 沒有自己的 viewport,它是設定視窗裡的一個分頁(原因見該模組)。
 
 mod chat;
 mod picker;
 mod settings;
+mod update;
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64};
@@ -35,6 +38,7 @@ enum Tab {
     Capture,
     Channels,
     Views,
+    Update,
     Help,
 }
 
@@ -69,6 +73,9 @@ pub struct AppInit {
     pub cfg: Arc<RwLock<Config>>,
     pub interval_ms: Arc<AtomicU64>,
     pub cmd_tx: Sender<CaptureCmd>,
+    /// UI 自己也要能送 UiEvent:手動檢查更新/下載更新都是從 UI 起頭,
+    /// 結果再經由同一條 channel 回到 drain_events。
+    pub ui_tx: Sender<UiEvent>,
     pub ui_rx: Receiver<UiEvent>,
     pub hotkey_tx: Sender<HotkeyCmd>,
     /// 向影像管線要求下一張全解析度畫面(供「在畫面上框選 ROI」/「吸取畫面顏色」使用)。
@@ -116,6 +123,7 @@ pub struct App {
     cfg: Arc<RwLock<Config>>,
     interval_ms: Arc<AtomicU64>,
     cmd_tx: Sender<CaptureCmd>,
+    ui_tx: Sender<UiEvent>,
     ui_rx: Receiver<UiEvent>,
     hotkey_tx: Sender<HotkeyCmd>,
     full_frame_req: Arc<AtomicBool>,
@@ -173,6 +181,9 @@ pub struct App {
     /// 是否已經做過「視窗真的生在看得到的地方嗎」的開機檢查(只做一次)。
     window_pos_checked: bool,
 
+    /// 設定視窗「更新」分頁的狀態(見 [`update`])。
+    update: update::UpdateUi,
+
     /// 上一次套用到 egui 全域文字樣式的 ui_font_px,值沒變就不用重算/重設 style。
     applied_font_px: f32,
 }
@@ -195,6 +206,7 @@ impl App {
             cfg: init.cfg,
             interval_ms: init.interval_ms,
             cmd_tx: init.cmd_tx,
+            ui_tx: init.ui_tx,
             ui_rx: init.ui_rx,
             hotkey_tx: init.hotkey_tx,
             full_frame_req: init.full_frame_req,
@@ -224,6 +236,7 @@ impl App {
             pos_before_gate_hide: None,
             started_at: Instant::now(),
             window_pos_checked: false,
+            update: update::UpdateUi::default(),
             applied_font_px: -1.0,
         };
 
@@ -320,6 +333,23 @@ impl App {
                 }
                 Ok(UiEvent::Error(e)) => self.last_error = Some(e),
                 Ok(UiEvent::HotkeyTriggered) => self.cycle_view(),
+                Ok(UiEvent::Update(e)) => {
+                    self.update.apply(e);
+                    // 更新的 UI 在設定視窗的「更新」分頁裡。有結果要給使用者看
+                    // 的時候自己把那個視窗叫出來並切過去——主視窗可能正收合成
+                    // 只剩工具列、或被主畫面判斷搬到螢幕外,靠它是傳不到話的。
+                    if self.update.wants_attention() {
+                        self.tab = Tab::Update;
+                        if self.settings_open {
+                            ctx.send_viewport_cmd_to(
+                                settings::settings_viewport_id(),
+                                egui::ViewportCommand::Focus,
+                            );
+                        } else {
+                            self.settings_open = true;
+                        }
+                    }
+                }
                 Err(_) => break,
             }
         }
@@ -392,6 +422,7 @@ impl eframe::App for App {
         // 兩個 show_viewport_immediate 才接在後面。
         // 主視窗的面板疊在 root Ui 裡;另外兩個是各自獨立的作業系統視窗,
         // 用 Context 開自己的 viewport,不需要(也不該)碰到 root Ui。
+        // 更新的 UI 不在這裡——它是設定視窗裡的一個分頁(原因見 update.rs)。
         self.ui_chat_window(ui);
         self.ui_settings_window(ctx);
         self.ui_screen_picker(ctx);

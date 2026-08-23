@@ -48,6 +48,8 @@ pub enum UiEvent {
     Error(String),
     /// 系統層級快捷鍵被按下(切換聊天檢視用)。
     HotkeyTriggered,
+    /// 自動更新流程的進度(檢查版號 / 下載 / 安裝完成 / 失敗)。
+    Update(crate::update::UpdateEvent),
 }
 
 /// UI → 擷取執行緒的指令。

@@ -88,9 +88,17 @@ refactor(capture): 精簡 D3D11 裝置建立
    ```
 
 4. Release workflow 自動建置並發佈,產出 `mushroom-chat-helper-v0.2.0-windows-x64.zip`
-   與 `.sha256`。
+   與 `.sha256`,外加一份裸的 `mushroom-chat-helper.exe` 與它的 `.sha256`。
 
 版號依 SemVer:破壞性變更改 MAJOR、新功能改 MINOR、修 bug 改 PATCH。
+
+### 裸 exe 附件不能拿掉
+
+`mushroom-chat-helper.exe` 與 `mushroom-chat-helper.exe.sha256` 這兩個附件是
+**程式內建自動更新的下載來源**(檔名寫死在 `src/update/github.rs` 的 `EXE_ASSET`,
+刻意不帶版號)。少了它們,已經安裝的舊版會查到新版卻下載不到東西,只能請
+使用者手動更新 —— 而且是安靜地退化。release workflow 裡有一道檢查會在附件缺席
+時直接讓 job 失敗;要改附件命名的話,`EXE_ASSET` 與 workflow 必須一起改。
 
 ## 工具鏈版本
 

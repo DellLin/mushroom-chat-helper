@@ -270,6 +270,11 @@ pub struct Config {
     pub window_pos: Option<[f32; 2]>,
     /// 主視窗上次的大小(egui points)。收合成只剩工具列高度時不會覆寫這個值。
     pub window_size: Option<[f32; 2]>,
+    /// 啟動時自動到 GitHub 看有沒有新版本。關掉之後只剩「更新」分頁的手動檢查。
+    pub auto_check_update: bool,
+    /// 使用者按過「略過這個版本」的 tag(例:`v0.3.0`),之後開機不再為它跳提示。
+    /// 手動按「檢查更新」時無視這個值。
+    pub skipped_update_version: Option<String>,
 }
 
 impl Default for Config {
@@ -330,6 +335,8 @@ impl Default for Config {
             // None 表示交給作業系統擺放,使用者搬動/縮放後才寫回設定檔。
             window_pos: None,
             window_size: None,
+            auto_check_update: true,
+            skipped_update_version: None,
         }
     }
 }
