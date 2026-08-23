@@ -1,6 +1,6 @@
 [package]
 name = "mushroom-chat-helper"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "蘑菇聊天小幫手:新楓之谷畫面擷取 + 依文字顏色分類頻道,直接顯示對話截圖"
 
