@@ -3,17 +3,28 @@
 //! 這個 viewport 永遠只有兩塊東西——頂端工具列與訊息截圖列表。沒有系統標題列
 //! 也就沒有內建的拖曳與縮放,兩者都在這裡自己補上,而且都能被「鎖定」停用。
 
+use std::time::Duration;
+
 use egui::{Color32, RichText};
 
 use crate::config::{AllViewMode, ViewDef};
+use crate::desktop;
 
 use super::settings::settings_viewport_id;
+
+/// 啟動後這段時間內不套用主畫面判斷的自動隱藏。
+///
+/// 剛開起來一定要看得到視窗:自動隱藏一旦因為任何原因卡住(遊戲切到別的畫面、
+/// 判斷顏色被改壞),使用者唯一想得到的救援動作就是「關掉重開」,那條路必須
+/// 永遠通。時間到了才交還給主畫面判斷,該藏的還是會藏。
+const GATE_STARTUP_GRACE: Duration = Duration::from_secs(5);
 
 impl super::App {
     /// 畫出整個主視窗。這裡的順序等同面板的堆疊順序,不要隨意調換:視窗命令要
     /// 在任何面板之前送出,提示條疊在工具列上面,訊息列表才吃掉剩下的空間。
     pub(super) fn ui_chat_window(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
+        self.ensure_window_reachable(&ctx);
         self.sync_gate_visibility(&ctx);
         self.ui_banners(ui);
 
@@ -37,12 +48,34 @@ impl super::App {
         }
     }
 
+    /// 開機檢查:第一次拿到實際視窗位置時確認它真的落在桌面範圍內,不是就直接
+    /// 搬回來。設定檔可能留著螢幕外的座標(舊版本會把自動隱藏用的位置存進去),
+    /// 上次用的那台螢幕也可能已經拔掉——「重新開啟應用程式一定看得到視窗」的
+    /// 最後一道保險,只做一次。
+    fn ensure_window_reachable(&mut self, ctx: &egui::Context) {
+        if self.window_pos_checked {
+            return;
+        }
+        // 第一幀還讀不到實際位置,下一幀再檢查。
+        let Some(rect) = ctx.input(|i| i.viewport().inner_rect) else {
+            return;
+        };
+        self.window_pos_checked = true;
+        let ppp = ctx.pixels_per_point();
+        if !desktop::pos_is_reachable([rect.min.x, rect.min.y], ppp) {
+            let [x, y] = desktop::fallback_pos(ppp);
+            ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(x, y)));
+        }
+    }
+
     /// 主畫面判斷:不在遊戲主畫面時把整個聊天視窗搬到螢幕座標範圍外,主畫面
     /// 再次出現時搬回原位。只在狀態真的改變時才送一次視窗命令。
     fn sync_gate_visibility(&mut self, ctx: &egui::Context) {
         // 「檢視管理」分頁可以關掉這個自動隱藏行為(關掉時視窗不受 gate 狀態影響)。
         let auto_hide_enabled = self.cfg.read().unwrap().gate_auto_hide_chat;
-        let want_hidden = auto_hide_enabled && !self.gate_open;
+        // 剛啟動的前幾秒一律不隱藏,見 GATE_STARTUP_GRACE。
+        let in_startup_grace = self.started_at.elapsed() < GATE_STARTUP_GRACE;
+        let want_hidden = auto_hide_enabled && !self.gate_open && !in_startup_grace;
         if want_hidden != self.chat_hidden_by_gate {
             self.chat_hidden_by_gate = want_hidden;
             if want_hidden {
@@ -52,10 +85,17 @@ impl super::App {
                 ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(
                     -32000.0, -32000.0,
                 )));
-            } else if let Some(pos) = self.pos_before_gate_hide.take() {
-                ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(
-                    pos[0], pos[1],
-                )));
+            } else {
+                // 還原一定要送出位置命令:沒記到隱藏前的位置(或記到的位置已經
+                // 不在桌面上了,例如那台螢幕拔掉了)就退到桌面左上角——只要少送
+                // 這一次,視窗就留在螢幕外再也回不來了。
+                let ppp = ctx.pixels_per_point();
+                let [x, y] = self
+                    .pos_before_gate_hide
+                    .take()
+                    .filter(|p| desktop::pos_is_reachable(*p, ppp))
+                    .unwrap_or_else(|| desktop::fallback_pos(ppp));
+                ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(x, y)));
             }
         }
     }
@@ -118,6 +158,13 @@ impl super::App {
         if !self.chat_hidden_by_gate {
             if let Some(rect) = ctx.input(|i| i.viewport().inner_rect) {
                 let pos = [rect.min.x, rect.min.y];
+                // 剛送出「從隱藏搬回原位」的那一幀,這裡讀到的還是搬走前的螢幕外
+                // 座標(視窗命令下一幀才生效),照寫的話設定檔就會存到 -32000,
+                // 下次啟動視窗直接生在看不見的地方。存不出「叫得回來的視窗」的
+                // 位置一律跳過,下一幀位置正常了自然會補寫。
+                if !desktop::pos_is_reachable(pos, ctx.pixels_per_point()) {
+                    return;
+                }
                 let size = [rect.width(), rect.height()];
                 let needs_update = {
                     let cfg = self.cfg.read().unwrap();

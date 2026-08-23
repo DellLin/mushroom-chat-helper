@@ -9,6 +9,7 @@
 
 mod capture;
 mod config;
+mod desktop;
 mod hotkey;
 mod model;
 mod ui;
@@ -42,7 +43,7 @@ fn main() -> eframe::Result<()> {
     let (ui_tx, ui_rx) = crossbeam_channel::unbounded();
     let (hotkey_tx, hotkey_cmd_rx) = crossbeam_channel::unbounded();
 
-    capture::wgc::spawn(cmd_rx, frame_tx, ui_tx.clone(), interval_ms.clone());
+    capture::wgc::spawn(cmd_tx.clone(), cmd_rx, frame_tx, ui_tx.clone(), interval_ms.clone());
     vision::spawn(frame_rx, ui_tx.clone(), cfg.clone(), full_frame_req.clone());
 
     let hk = cfg.read().unwrap().hotkey.clone();
@@ -70,7 +71,12 @@ fn main() -> eframe::Result<()> {
         // 無工具列(無最小化/最大化/關閉鈕),疊在遊戲聊天視窗上時才不會露出裝飾邊框;
         // 結束應用程式改放進設定視窗裡。
         .with_decorations(false);
-    if let Some(pos) = saved_pos {
+    // 存回來的位置先確認落在桌面範圍內才用。舊版本可能把主畫面判斷用來隱藏
+    // 視窗的螢幕外座標寫進設定檔,上次用的那台螢幕也可能已經拔掉了——照著開
+    // 就會生出一個永遠看不見的視窗。這裡沒有 egui 的 pixels_per_point 可用,
+    // 直接以實體像素比對(points 只會比像素少,不會多),擋掉明顯不合理的值;
+    // 真正精準的檢查在第一幀由 ui::App 再做一次。
+    if let Some(pos) = saved_pos.filter(|p| desktop::pos_is_reachable(*p, 1.0)) {
         viewport = viewport.with_position(pos);
     }
     if saved_on_top {

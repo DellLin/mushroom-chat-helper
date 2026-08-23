@@ -89,10 +89,16 @@ unsafe impl Sync for HandlerCtx {}
 struct ActiveCapture {
     session: GraphicsCaptureSession,
     pool: Direct3D11CaptureFramePool,
+    /// 只為了留住 Closed 事件的註冊(見 start_capture)才存著。
+    item: GraphicsCaptureItem,
+    closed_token: i64,
 }
 
 impl ActiveCapture {
     fn stop(self) {
+        // 先退掉 Closed 事件再關 session,不然自己主動停止擷取時還會被回呼
+        // 通知一次「視窗關閉了」,對使用者是假訊息。
+        let _ = self.item.RemoveClosed(self.closed_token);
         let _ = self.session.Close();
         let _ = self.pool.Close();
     }
@@ -103,6 +109,8 @@ fn start_capture(
     hwnd: isize,
     frame_tx: Sender<FramePacket>,
     interval_ms: Arc<AtomicU64>,
+    cmd_tx: Sender<CaptureCmd>,
+    ui_tx: Sender<UiEvent>,
 ) -> anyhow::Result<ActiveCapture> {
     if !GraphicsCaptureSession::IsSupported()? {
         anyhow::bail!("此系統不支援 Windows.Graphics.Capture(需 Windows 10 1903 以上)");
@@ -144,8 +152,21 @@ fn start_capture(
         Ok(())
     }))?;
 
+    // 擷取目標視窗被關掉時,WGC 只是安靜地不再送畫面,不會回報任何錯誤——
+    // 沒有這個事件就沒人知道該收拾,UI 會一直顯示「擷取中」,聊天視窗也可能
+    // 卡在被自動隱藏的狀態。收到就送一次 Stop 給擷取執行緒自己,走正常的停止
+    // 流程(釋放 session、回報 Idle),UI 收到非 Running 狀態就會把視窗放出來。
+    let closed_token = item.Closed(&TypedEventHandler::<
+        GraphicsCaptureItem,
+        IInspectable,
+    >::new(move |_, _| {
+        let _ = ui_tx.send(UiEvent::Error("擷取的遊戲視窗已關閉,已停止擷取".into()));
+        let _ = cmd_tx.send(CaptureCmd::Stop);
+        Ok(())
+    }))?;
+
     session.StartCapture()?;
-    Ok(ActiveCapture { session, pool })
+    Ok(ActiveCapture { session, pool, item, closed_token })
 }
 
 fn on_frame(ctx: &HandlerCtx, pool: &Direct3D11CaptureFramePool) -> anyhow::Result<()> {
@@ -241,8 +262,10 @@ fn on_frame(ctx: &HandlerCtx, pool: &Direct3D11CaptureFramePool) -> anyhow::Resu
     Ok(())
 }
 
-/// 擷取執行緒主迴圈。
+/// 擷取執行緒主迴圈。`cmd_tx` 是指令端自己的複本,給「擷取目標視窗被關閉」
+/// 的事件回呼用來自己下 Stop(見 start_capture)。
 pub fn spawn(
+    cmd_tx: Sender<CaptureCmd>,
     cmd_rx: Receiver<CaptureCmd>,
     frame_tx: Sender<FramePacket>,
     ui_tx: Sender<UiEvent>,
@@ -279,6 +302,8 @@ pub fn spawn(
                             hwnd,
                             frame_tx.clone(),
                             interval_ms.clone(),
+                            cmd_tx.clone(),
+                            ui_tx.clone(),
                         ) {
                             Ok(a) => {
                                 active = Some(a);
