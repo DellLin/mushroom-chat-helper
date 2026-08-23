@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="cap" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F77A45"/>
+      <stop offset="1" stop-color="#D23A17"/>
+    </linearGradient>
+    <linearGradient id="stem" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFF3DE"/>
+      <stop offset="1" stop-color="#E9CEA5"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ===== 蘑菇(左下,主體) ===== -->
+  <!-- 菌柄 -->
+  <path fill="url(#stem)" stroke="#2B1E17" stroke-width="10" stroke-linejoin="round"
+        d="M56,140 H126 V202 a30,30 0 0 1 -30,30 H86 a30,30 0 0 1 -30,-30 Z"/>
+  <!-- 菌傘 -->
+  <path fill="url(#cap)" stroke="#2B1E17" stroke-width="10" stroke-linejoin="round"
+        d="M8,148 a83,86 0 0 1 166,0 a11,11 0 0 1 -11,11 H19 a11,11 0 0 1 -11,-11 Z"/>
+  <!-- 傘上斑點 -->
+  <g fill="#FFF1DC">
+    <ellipse cx="47"  cy="116" rx="19" ry="15"/>
+    <ellipse cx="97"  cy="88"  rx="24" ry="18"/>
+    <ellipse cx="143" cy="120" rx="16" ry="13"/>
+  </g>
+  <!-- 眼睛 -->
+  <g fill="#2B1E17">
+    <ellipse cx="76"  cy="184" rx="9.5" ry="14"/>
+    <ellipse cx="108" cy="184" rx="9.5" ry="14"/>
+  </g>
+
+  <!-- ===== 對話框(右上,畫在最前面,尾巴指向菇頭) ===== -->
+  <path fill="#FFFFFF" stroke="#2B1E17" stroke-width="10" stroke-linejoin="round"
+        d="M158,8 H234 a14,14 0 0 1 14,14 V78 a14,14 0 0 1 -14,14 H196
+           L164,124 L172,92 H158 a14,14 0 0 1 -14,-14 V22 a14,14 0 0 1 14,-14 Z"/>
+  <g fill="#2B1E17">
+    <circle cx="169" cy="50" r="8"/>
+    <circle cx="196" cy="50" r="8"/>
+    <circle cx="223" cy="50" r="8"/>
+  </g>
+</svg>
