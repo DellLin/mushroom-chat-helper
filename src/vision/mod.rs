@@ -216,7 +216,7 @@ fn hash_labels(labels: &[u8]) -> u64 {
 /// BGRA → RGBA(alpha 一律補滿),整張畫面、不縮放。
 fn to_rgba(bgra: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(bgra.len());
-    for px in bgra.chunks_exact(4) {
+    for px in bgra.as_chunks::<4>().0 {
         out.extend_from_slice(&[px[2], px[1], px[0], 255]);
     }
     out
@@ -229,7 +229,7 @@ fn crop_rgba(pkt: &FramePacket, roi: Roi, min: (usize, usize)) -> Option<(usize,
     let mut out = Vec::with_capacity(rw * rh * 4);
     for y in ry..ry + rh {
         let start = (y * fw + rx) * 4;
-        for px in pkt.bgra[start..start + rw * 4].chunks_exact(4) {
+        for px in pkt.bgra[start..start + rw * 4].as_chunks::<4>().0 {
             out.extend_from_slice(&[px[2], px[1], px[0], 255]);
         }
     }
