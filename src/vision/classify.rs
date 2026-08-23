@@ -67,7 +67,9 @@ impl Palette {
 
 /// 對 ROI 每個像素標記所屬頻道(NO_LABEL = 沒有任何頻道命中)。
 pub fn label_pixels(rgba: &[u8], palette: &Palette) -> Vec<u8> {
-    rgba.chunks_exact(4)
+    rgba.as_chunks::<4>()
+        .0
+        .iter()
         .map(|px| match palette.match_px(px[0], px[1], px[2]) {
             Some(idx) => idx as u8,
             None => NO_LABEL,

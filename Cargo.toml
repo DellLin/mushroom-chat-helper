@@ -1,6 +1,6 @@
 [package]
 name = "mushroom-chat-helper"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "蘑菇聊天小幫手:新楓之谷畫面擷取 + 依文字顏色分類頻道,直接顯示對話截圖"
 
@@ -8,15 +8,28 @@ description = "蘑菇聊天小幫手:新楓之谷畫面擷取 + 依文字顏色�
 anyhow = "1"
 chrono = "0.4"
 crossbeam-channel = "0.5"
-eframe = "0.29"
-egui = "0.29"
+# eframe 0.36 的預設算繪後端是 wgpu,這裡刻意改回 glow(OpenGL)。
+# 理由:wgpu 在 Windows 上會挑 Vulkan,於是 NVIDIA App / GOG Galaxy 這類
+# 疊圖軟體會把本程式當成遊戲勾住,直接把 FPS/溫度 OSD 畫到聊天視窗上
+# —— 本程式自己就是要疊在遊戲上的疊圖層,被別人疊回來等於毀掉用途。
+# 順帶一提 release exe 也從 16.6 MB 降回 9.7 MB。
+# 換回 wgpu 的話記得 on_exit 的簽名會少一個 glow context 參數。
+eframe = { version = "0.36", default-features = false, features = [
+    "accesskit",
+    "default_fonts",
+    "glow",
+    "links",
+    "wayland",
+    "x11",
+] }
+egui = "0.36"
 log = "0.4"
 env_logger = "0.11"
 serde = { version = "1", features = ["derive"] }
-toml = "0.8"
+toml = "1"
 
 [dependencies.windows]
-version = "=0.58.0"
+version = "=0.62.2"
 features = [
     "Foundation",
     "Graphics",
@@ -34,6 +47,12 @@ features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_Input_KeyboardAndMouse",
 ]
+
+[build-dependencies]
+# 把 assets/icon.ico 嵌成 exe 的圖示資源(檔案總管/捷徑看到的那個)。
+winresource = "0.1"
+# 建置期把 icon-256.png 解成 RGBA,執行期就不用背一個 PNG 解碼器。
+png = "0.18"
 
 [profile.release]
 opt-level = 3

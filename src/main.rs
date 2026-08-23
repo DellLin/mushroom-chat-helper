@@ -17,6 +17,18 @@ mod vision;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, RwLock};
 
+/// 視窗圖示(工作列 / Alt-Tab)。
+///
+/// RGBA 像素由 build.rs 在建置期從 `assets/icon-256.png` 解好放進 OUT_DIR,
+/// 這裡直接嵌現成的位元組 —— 執行期不必為了開一張圖就背一個 PNG 解碼器。
+fn window_icon() -> egui::IconData {
+    egui::IconData {
+        rgba: include_bytes!(concat!(env!("OUT_DIR"), "/window-icon.rgba")).to_vec(),
+        width: env!("WINDOW_ICON_W").parse().expect("build.rs 應該要給出寬度"),
+        height: env!("WINDOW_ICON_H").parse().expect("build.rs 應該要給出高度"),
+    }
+}
+
 fn main() -> eframe::Result<()> {
     env_logger::init();
 
@@ -50,6 +62,11 @@ fn main() -> eframe::Result<()> {
         // 工具列本身用 horizontal_wrapped,窄的時候會自動換行,不會被裁切/遮住。
         .with_min_inner_size([260.0, 90.0])
         .with_title(format!("蘑菇聊天小幫手 v{}", env!("CARGO_PKG_VERSION")))
+        // exe 本身的圖示由 build.rs 嵌成資源(檔案總管/捷徑看到的那個);這裡設的
+        // 是視窗圖示,決定工作列與 Alt-Tab 顯示什麼。兩者是不同來源,都要設 ——
+        // 實測過:只嵌 exe 資源、不呼叫 with_icon 的話,視窗會拿到 winit 的預設
+        // 圖示,而不是退回用 exe 的 .ico。
+        .with_icon(window_icon())
         // 無工具列(無最小化/最大化/關閉鈕),疊在遊戲聊天視窗上時才不會露出裝飾邊框;
         // 結束應用程式改放進設定視窗裡。
         .with_decorations(false);
