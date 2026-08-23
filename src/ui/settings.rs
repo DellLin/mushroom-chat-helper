@@ -43,8 +43,11 @@ impl super::App {
                 ))
                 .with_inner_size([760.0, 600.0])
                 .with_window_level(settings_level),
-            |ctx, _class| {
-                egui::TopBottomPanel::top("settings_tabs").show(ctx, |ui| {
+            // 0.36 起 viewport callback 收到的是這個 viewport 的 root Ui,
+            // 不再是 Context;面板疊在它裡面,Context 從 ui.ctx() 取。
+            |ui, _class| {
+                let ctx = ui.ctx().clone();
+                egui::Panel::top("settings_tabs").show(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.selectable_value(&mut self.tab, Tab::Capture, "🎥 擷取設定");
                         ui.selectable_value(&mut self.tab, Tab::Channels, "🎨 頻道");
@@ -59,7 +62,7 @@ impl super::App {
                         }
                     });
                 });
-                egui::CentralPanel::default().show(ctx, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
                     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                         match self.tab {
                             Tab::Capture => self.ui_capture(ui),
@@ -348,8 +351,9 @@ impl super::App {
                             let rect = egui::Rect::from_two_pos(s, cur);
                             ui.painter().rect_stroke(
                                 rect,
-                                egui::Rounding::ZERO,
+                                egui::CornerRadius::ZERO,
                                 egui::Stroke::new(2.0_f32, Color32::YELLOW),
+                                egui::StrokeKind::Middle,
                             );
                             if resp.drag_stopped() {
                                 let x0 = ((rect.min.x - origin.x).max(0.0) * to_frame) as u32;
@@ -391,8 +395,9 @@ impl super::App {
                     );
                     ui.painter().rect_stroke(
                         r,
-                        egui::Rounding::ZERO,
+                        egui::CornerRadius::ZERO,
                         egui::Stroke::new(2.0_f32, Color32::LIGHT_GREEN),
+                        egui::StrokeKind::Middle,
                     );
                 }
                 if cfg.gate.roi.w > 0 {
@@ -403,8 +408,9 @@ impl super::App {
                     );
                     ui.painter().rect_stroke(
                         r,
-                        egui::Rounding::ZERO,
+                        egui::CornerRadius::ZERO,
                         egui::Stroke::new(2.0_f32, Color32::from_rgb(255, 140, 60)),
+                        egui::StrokeKind::Middle,
                     );
                 }
             } else {

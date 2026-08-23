@@ -368,3 +368,28 @@ pub fn save(cfg: &Config) {
         Err(e) => log::warn!("設定檔序列化失敗: {e}"),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// load() 解析失敗時是靜靜地回退到預設值(見上面的 unwrap_or_else),
+    /// 使用者校正過的顏色與座標會無聲消失。升級 toml/serde 時這個測試會先叫。
+    #[test]
+    fn config_survives_a_toml_round_trip() {
+        let original = toml::to_string_pretty(&Config::default()).expect("序列化失敗");
+        let parsed: Config = toml::from_str(&original).expect("自己寫出來的設定檔卻讀不回來");
+        let again = toml::to_string_pretty(&parsed).expect("序列化失敗");
+        assert_eq!(original, again, "round-trip 後設定檔內容改變了");
+    }
+
+    /// #[serde(default)] 的意思是舊設定檔缺欄位也要能讀。
+    #[test]
+    fn partial_config_falls_back_to_defaults_per_field() {
+        let cfg: Config = toml::from_str("fps = 11\n").expect("部分設定檔應該要能解析");
+        assert_eq!(cfg.fps, 11, "有給的欄位要照給的值");
+        let d = Config::default();
+        assert_eq!(cfg.dedup_seconds, d.dedup_seconds, "沒給的欄位要回到預設值");
+        assert!(!cfg.channels.is_empty(), "頻道清單不該變成空的");
+    }
+}

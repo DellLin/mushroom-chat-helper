@@ -38,7 +38,10 @@ impl super::App {
                 .with_decorations(false)
                 .with_fullscreen(true)
                 .with_window_level(egui::viewport::WindowLevel::AlwaysOnTop),
-            |ctx, _class| {
+            // 0.36 起 viewport callback 收到的是這個 viewport 的 root Ui。
+            |ui, _class| {
+                let ctx = ui.ctx().clone();
+                let ctx = &ctx;
                 // 全螢幕視窗底下 Windows 常常不畫系統游標(尤其是 with_fullscreen),
                 // 光靠 set_cursor_icon 使用者會完全看不到滑鼠在哪。改成隱藏系統游標,
                 // 自己畫一條貫穿全螢幕的十字準心,精準度更高、也保證看得到。
@@ -47,8 +50,8 @@ impl super::App {
                     .input(|i| i.key_pressed(egui::Key::Escape) || i.viewport().close_requested());
 
                 egui::CentralPanel::default()
-                    .frame(egui::Frame::none().fill(Color32::from_gray(15)))
-                    .show(ctx, |ui| {
+                    .frame(egui::Frame::NONE.fill(Color32::from_gray(15)))
+                    .show(ui, |ui| {
                         let (mode, frame_w, frame_h, tex_id) = {
                             let p = self.screen_pick.as_ref().unwrap();
                             (p.mode, p.frame_w, p.frame_h, p.tex.id())
@@ -161,8 +164,9 @@ impl super::App {
                                     egui::Rect::from_two_pos(to_screen(start_fc), effective_screen);
                                 ui.painter().rect_stroke(
                                     rect,
-                                    egui::Rounding::ZERO,
+                                    egui::CornerRadius::ZERO,
                                     egui::Stroke::new(2.0_f32, Color32::YELLOW),
+                                    egui::StrokeKind::Middle,
                                 );
                                 ui.painter().circle_filled(
                                     to_screen(start_fc),
@@ -213,7 +217,7 @@ impl super::App {
                         }
 
                         {
-                            let screen = ctx.input(|i| i.screen_rect());
+                            let screen = ctx.input(|i| i.viewport_rect());
                             draw_crosshair(ui.painter(), screen, effective_screen);
                             let rgba = &self.screen_pick.as_ref().unwrap().rgba;
                             draw_magnifier(
@@ -286,41 +290,53 @@ pub(super) fn request_pick(
 /// 按鈕的小視窗。刻意不用 egui 內建的 color_edit_button(它還有 HSV/Hex 格式
 /// 切換)——這裡只在乎「文字顏色的 RGB 數值」,格式轉換只是多餘的換算。
 /// 回傳 true 表示這一幀使用者按下了「吸取畫面顏色」。
-pub(super) fn color_picker_rgb(ui: &mut egui::Ui, id_salt: impl std::hash::Hash, color: &mut [u8; 3]) -> bool {
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(28.0, 18.0), egui::Sense::click());
-    if ui.is_rect_visible(rect) {
-        let c = Color32::from_rgb(color[0], color[1], color[2]);
-        ui.painter().rect_filled(rect, 2.0, c);
-        ui.painter().rect_stroke(rect, 2.0, egui::Stroke::new(1.0_f32, Color32::from_gray(90)));
-    }
+pub(super) fn color_picker_rgb(
+    ui: &mut egui::Ui,
+    id_salt: impl egui::AsIdSalt,
+    color: &mut [u8; 3],
+) -> bool {
+    // 色票會在頻道迴圈裡重複出現,每個都要有自己的 id,否則 popup 會互搶。
+    // 原本是靠 make_persistent_id(id_salt) 手動配 id;0.36 的 Popup 直接沿用
+    // 觸發它的 Response 的 id,所以改成用 push_id 把整段包進唯一的 id 範圍。
+    ui.push_id(id_salt, |ui| {
+        let (rect, resp) = ui.allocate_exact_size(egui::vec2(28.0, 18.0), egui::Sense::click());
+        if ui.is_rect_visible(rect) {
+            let c = Color32::from_rgb(color[0], color[1], color[2]);
+            ui.painter().rect_filled(rect, 2.0, c);
+            ui.painter().rect_stroke(
+                rect,
+                2.0,
+                egui::Stroke::new(1.0_f32, Color32::from_gray(90)),
+                egui::StrokeKind::Middle,
+            );
+        }
 
-    let popup_id = ui.make_persistent_id(id_salt);
-    if resp.clicked() {
-        ui.memory_mut(|m| m.toggle_popup(popup_id));
-    }
-
-    let mut eyedrop_clicked = false;
-    egui::popup_below_widget(
-        ui,
-        popup_id,
-        &resp,
-        egui::PopupCloseBehavior::CloseOnClickOutside,
-        |ui| {
-            ui.set_min_width(150.0);
-            for (label, ch) in [("R", 0usize), ("G", 1), ("B", 2)] {
-                ui.horizontal(|ui| {
-                    ui.label(label);
-                    ui.add(egui::DragValue::new(&mut color[ch]).range(0..=255));
-                });
-            }
-            ui.separator();
-            if ui.button("🎯 吸取畫面顏色").clicked() {
-                eyedrop_clicked = true;
-                ui.memory_mut(|m| m.close_popup());
-            }
-        },
-    );
-    eyedrop_clicked
+        let mut eyedrop_clicked = false;
+        // from_toggle_button_response 自己處理「點按鈕開/關」,不必再手動
+        // toggle_popup。預設對齊是 RectAlign::BOTTOM_START,跟舊的
+        // popup_below_widget 位置一致。
+        //
+        // close_behavior 一定要指定 CloseOnClickOutside:0.36 的預設是
+        // CloseOnClick,那會讓使用者一拖 R/G/B 數值就把 popup 關掉。
+        egui::Popup::from_toggle_button_response(&resp)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show(|ui| {
+                ui.set_min_width(150.0);
+                for (label, ch) in [("R", 0usize), ("G", 1), ("B", 2)] {
+                    ui.horizontal(|ui| {
+                        ui.label(label);
+                        ui.add(egui::DragValue::new(&mut color[ch]).range(0..=255));
+                    });
+                }
+                ui.separator();
+                if ui.button("🎯 吸取畫面顏色").clicked() {
+                    eyedrop_clicked = true;
+                    ui.close();
+                }
+            });
+        eyedrop_clicked
+    })
+    .inner
 }
 
 /// 貫穿全螢幕的十字準心:系統游標在全螢幕無邊框視窗上常常看不到,自己畫
@@ -406,7 +422,7 @@ fn draw_magnifier(
         ),
         egui::vec2(MAG_CELL, MAG_CELL),
     );
-    painter.rect_stroke(center_rect, 0.0, egui::Stroke::new(1.5_f32, Color32::RED));
+    painter.rect_stroke(center_rect, 0.0, egui::Stroke::new(1.5_f32, Color32::RED), egui::StrokeKind::Middle);
 
     painter.text(
         egui::pos2(grid_min.x, grid_min.y + grid_size.y + 6.0),
@@ -418,7 +434,7 @@ fn draw_magnifier(
     let rgb_row_y = grid_min.y + grid_size.y + text_h + 8.0;
     let swatch = egui::Rect::from_min_size(egui::pos2(grid_min.x, rgb_row_y + 2.0), egui::vec2(14.0, 14.0));
     painter.rect_filled(swatch, 2.0, center_color);
-    painter.rect_stroke(swatch, 2.0, egui::Stroke::new(1.0_f32, Color32::from_gray(120)));
+    painter.rect_stroke(swatch, 2.0, egui::Stroke::new(1.0_f32, Color32::from_gray(120)), egui::StrokeKind::Middle);
     painter.text(
         egui::pos2(swatch.max.x + 6.0, rgb_row_y),
         egui::Align2::LEFT_TOP,
