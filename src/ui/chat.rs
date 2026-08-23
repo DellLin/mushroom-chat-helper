@@ -280,6 +280,10 @@ impl super::App {
             .stick_to_bottom(true)
             .auto_shrink(false)
             .show(ui, |ui| {
+                // 每則訊息之間不留任何垂直間距:截圖本身已經帶著遊戲聊天視窗
+                // 的行距,再加上元件間距會讓疊在遊戲上的對話被拉開、對不上原本
+                // 的行位置。水平間距(時間與頻道標籤之間)維持預設。
+                ui.spacing_mut().item_spacing.y = 0.0;
                 for m in &self.messages {
                     if let Some(v) = allowed {
                         if !v.channels.contains(&m.channel) {
@@ -310,7 +314,6 @@ impl super::App {
                     }
                     let size = egui::vec2(m.w as f32 * scale, m.h as f32 * scale);
                     ui.add(egui::Image::new(&m.tex).fit_to_exact_size(size));
-                    ui.add_space(2.0);
                 }
             });
     }
