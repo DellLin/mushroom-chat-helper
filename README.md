@@ -1,5 +1,7 @@
 # 蘑菇聊天小幫手 (mushroom-chat-helper)
 
+<img src="assets/icon-256.png" width="96" height="96" alt="蘑菇聊天小幫手圖示" />
+
 [![CI](https://github.com/DellLin/mushroom-chat-helper/actions/workflows/ci.yml/badge.svg)](https://github.com/DellLin/mushroom-chat-helper/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/DellLin/mushroom-chat-helper?display_name=tag)](https://github.com/DellLin/mushroom-chat-helper/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
