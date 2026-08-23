@@ -390,7 +390,7 @@ impl eframe::App for App {
     }
 
     // 0.36 的預設後端從 glow 換成 wgpu,on_exit 也就不再收 glow context。
-    fn on_exit(&mut self) {
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         config::save(&self.cfg.read().unwrap());
         let _ = self.cmd_tx.send(CaptureCmd::Shutdown);
         let _ = self.hotkey_tx.send(HotkeyCmd::Shutdown);
