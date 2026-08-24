@@ -1,6 +1,6 @@
 [package]
 name = "mushroom-chat-helper"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 description = "蘑菇聊天小幫手:新楓之谷畫面擷取 + 依文字顏色分類頻道,直接顯示對話截圖"
 
@@ -50,6 +50,7 @@ features = [
     "Win32_Graphics_Direct3D11",
     "Win32_Graphics_Dxgi",
     "Win32_Graphics_Dxgi_Common",
+    "Win32_System_Threading",
     "Win32_System_WinRT",
     "Win32_System_WinRT_Direct3D11",
     "Win32_System_WinRT_Graphics_Capture",

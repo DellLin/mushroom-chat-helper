@@ -1,7 +1,8 @@
 //! 自動更新:開機時跟 GitHub 對一下版號,有新版就問使用者要不要換掉自己。
 //!
 //! ```text
-//! 啟動 ─→ cleanup_stale()          清掉上次更新留下的 .old
+//! 啟動 ─→ wait_for_predecessor_exit() 若是更新後重啟,先等舊行程真的死透
+//!      └→ cleanup_stale()             清掉上次更新留下的 .old
 //!      └→ spawn_check()  背景執行緒 ─ GitHub API ─→ UiEvent::Update(Available)
 //!                                                        │ 使用者按「立即更新」
 //!         spawn_install() 背景執行緒 ─ 下載 ─ 驗 SHA256 ─→ 換檔 ─→ Installed
@@ -22,7 +23,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use crossbeam_channel::Sender;
 
 pub use github::Release;
-pub use install::{cleanup_stale, relaunch};
+pub use install::{cleanup_stale, relaunch, wait_for_predecessor_exit};
 
 use crate::model::UiEvent;
 

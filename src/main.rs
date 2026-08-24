@@ -34,6 +34,11 @@ fn window_icon() -> egui::IconData {
 fn main() -> eframe::Result<()> {
     env_logger::init();
 
+    // 如果是自動更新換裝完、按下「立即重新啟動」後生出來的新行程,先等舊行程
+    // 真的結束——舊行程死透前,全域快捷鍵還沒真的釋放、.old 也還鎖著,搶著
+    // 做這些事只會失敗(一般啟動沒有這個情境,立刻回傳)。
+    update::wait_for_predecessor_exit();
+
     // 上一次自動更新留下的 .old / .new 現在才刪得掉(那時舊版還在跑)。
     update::cleanup_stale();
 
