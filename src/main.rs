@@ -13,6 +13,7 @@ mod desktop;
 mod hotkey;
 mod model;
 mod ui;
+mod update;
 mod vision;
 
 use std::sync::atomic::{AtomicBool, AtomicU64};
@@ -33,6 +34,9 @@ fn window_icon() -> egui::IconData {
 fn main() -> eframe::Result<()> {
     env_logger::init();
 
+    // 上一次自動更新留下的 .old / .new 現在才刪得掉(那時舊版還在跑)。
+    update::cleanup_stale();
+
     let cfg = Arc::new(RwLock::new(config::load()));
     let full_frame_req = Arc::new(AtomicBool::new(false));
     let fps = cfg.read().unwrap().fps.max(1) as u64;
@@ -48,7 +52,16 @@ fn main() -> eframe::Result<()> {
 
     let hk = cfg.read().unwrap().hotkey.clone();
     let initial_vk = hotkey::vk_for_name(&hk.key).unwrap_or(0x09);
-    hotkey::spawn(hotkey_cmd_rx, ui_tx, (hk.ctrl, hk.alt, hk.shift, hk.win, initial_vk));
+    hotkey::spawn(hotkey_cmd_rx, ui_tx.clone(), (hk.ctrl, hk.alt, hk.shift, hk.win, initial_vk));
+
+    // 開機檢查新版。整段跑在背景執行緒,連不上 GitHub 也只是靜靜地沒有結果——
+    // 更新這件事不該讓一個聊天疊圖工具開不起來。
+    {
+        let c = cfg.read().unwrap();
+        if c.auto_check_update {
+            update::spawn_check(ui_tx.clone(), c.skipped_update_version.clone(), false);
+        }
+    }
 
     let (saved_pos, saved_size, saved_on_top) = {
         let c = cfg.read().unwrap();
@@ -85,7 +98,8 @@ fn main() -> eframe::Result<()> {
 
     let options = eframe::NativeOptions { viewport, ..Default::default() };
 
-    let init = ui::AppInit { cfg, interval_ms, cmd_tx, ui_rx, hotkey_tx, full_frame_req };
+    let init =
+        ui::AppInit { cfg, interval_ms, cmd_tx, ui_tx, ui_rx, hotkey_tx, full_frame_req };
     eframe::run_native(
         "蘑菇聊天小幫手",
         options,

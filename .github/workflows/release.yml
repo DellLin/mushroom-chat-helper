@@ -91,6 +91,16 @@ jobs:
           Write-Host "SHA256: $hash"
           "zip=dist/$name.zip" >> $env:GITHUB_OUTPUT
 
+          # 裸的 exe 與它的校驗檔。程式內建的自動更新抓的就是這兩個附件
+          # (檔名必須跟 src/update/github.rs 的 EXE_ASSET 一致):名字固定
+          # 不帶版號,更新流程才不用自己拼字串猜檔名,也省下在程式裡塞一個
+          # zip 解碼器。順帶讓只想要一顆 exe 的使用者不必先解壓縮。
+          $exe = 'mushroom-chat-helper.exe'
+          Copy-Item "target/release/$exe" "dist/$exe"
+          $exeHash = (Get-FileHash "dist/$exe" -Algorithm SHA256).Hash.ToLower()
+          "$exeHash  $exe" | Out-File -Encoding ascii "dist/$exe.sha256"
+          Write-Host "exe SHA256: $exeHash"
+
       - name: Create GitHub Release
         shell: pwsh
         env:
@@ -104,10 +114,20 @@ jobs:
           $ErrorActionPreference = 'Stop'
           # PowerShell 不會幫原生執行檔展開萬用字元,gh 會收到字面上的
           # "dist/*.zip" 而找不到檔案 —— 這裡先自己展開再用陣列展開傳進去。
-          $assets = @(Get-ChildItem -Path dist/*.zip, dist/*.sha256 |
+          $assets = @(Get-ChildItem -Path dist/*.zip, dist/*.exe, dist/*.sha256 |
             ForEach-Object { $_.FullName })
           if ($assets.Count -eq 0) { Write-Error "找不到要上傳的檔案"; exit 1 }
           Write-Host "上傳:$($assets -join ', ')"
+
+          # 少了裸 exe 的話,舊版程式的「自動更新」會查到新版卻下載不到東西,
+          # 只能請使用者手動下載。與其讓它悄悄退化,不如在這裡就擋下來。
+          $exeAsset = 'mushroom-chat-helper.exe'
+          foreach ($required in @($exeAsset, "$exeAsset.sha256")) {
+            if (-not ($assets | Where-Object { (Split-Path $_ -Leaf) -eq $required })) {
+              Write-Error "自動更新需要的附件不見了:$required"
+              exit 1
+            }
+          }
 
           if ($exists) {
             Write-Host "Release $tag 已存在,覆寫附件"
