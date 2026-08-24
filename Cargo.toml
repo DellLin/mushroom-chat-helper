@@ -1,6 +1,6 @@
 [package]
 name = "mushroom-chat-helper"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "蘑菇聊天小幫手:新楓之谷畫面擷取 + 依文字顏色分類頻道,直接顯示對話截圖"
 
@@ -14,7 +14,7 @@ crossbeam-channel = "0.5"
 # wgpu 的預設 backends 是 PRIMARY | GL,會依序試 DX12 / Vulkan,失敗才退回 GL
 # —— 等於把原本的 glow 路徑保留成最後一道 fallback,再往上疊兩層一線支援的後端;
 # 挑 adapter 時也會優先選獨顯,glow 沒有這層邏輯。
-# 代價是 release exe 從 9.7 MB 漲到約 17 MB,以及建 device + 編 shader 的
+# 代價是 release exe 從 12.9 MB 漲到約 19.2 MB,以及建 device + 編 shader 的
 # 冷啟動成本。本程式閒置只有 4 FPS、材質也只在新訊息時上傳,算繪負載趨近於零,
 # 兩者的執行期效能差異量不出來,所以這個交換是划算的。
 # 使用者要指定後端可以設環境變數 WGPU_BACKEND=dx12|vulkan|gl。
