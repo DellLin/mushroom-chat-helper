@@ -16,7 +16,7 @@ use crate::config::{Config, GateRoi, Roi};
 use crate::model::{ChatImage, FramePacket, UiEvent};
 
 use classify::{channel_mask_bits, label_pixels, LabelStats, Palette};
-use dedup::{ChannelCooldown, ImageDedup, LruSet};
+use dedup::{ImageDedup, LruSet};
 
 /// 送到 UI 的全視窗預覽最大寬度(等比縮小)。
 const PREVIEW_MAX_W: usize = 640;
@@ -113,7 +113,6 @@ fn run(
 ) {
     let mut last_preview = Instant::now() - PREVIEW_INTERVAL;
     let mut lru = LruSet::new(512);
-    let mut cooldown = ChannelCooldown::new(600);
     let mut image_dedup = ImageDedup::new(cfg.read().unwrap().dedup_seconds);
     // 上一幀的標記雜湊,用來整幀快篩;None 表示還沒處理過任何一幀。
     let mut prev_hash: Option<u64> = None;
@@ -206,9 +205,6 @@ fn run(
         let Some(dom) = stats.dominant(MIN_DOMINANT_PIXELS) else {
             continue;
         };
-        if !cooldown.allow(dom as u8) {
-            continue;
-        }
 
         // ROI 只框住單一則對話,所以只需要判斷「這次擷取到的畫面跟上一次是不是
         // 同一則」——把畫面依「這則訊息所屬頻道」的文字顏色過濾成二值遮罩,再用

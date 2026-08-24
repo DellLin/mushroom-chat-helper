@@ -1,7 +1,7 @@
-//! 去重/節流:標記雜湊(避免重複處理未變動的畫面)、同頻道冷卻,
+//! 去重/節流:標記雜湊(避免重複處理未變動的畫面),
 //! 以及畫面去重(避免同一則訊息因背景抖動重複顯示)。
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashSet, VecDeque};
 use std::time::{Duration, Instant};
 
 use super::classify::mask_similarity;
@@ -29,31 +29,6 @@ impl LruSet {
                 self.set.remove(&old);
             }
         }
-        true
-    }
-}
-
-/// 同頻道冷卻:半透明背景造成標記微幅抖動時,避免同一則訊息在短時間內
-/// 被反覆送出。鍵是頻道標籤,所以不同頻道的訊息不會互相擋住。
-pub struct ChannelCooldown {
-    last: HashMap<u8, Instant>,
-    cooldown: Duration,
-}
-
-impl ChannelCooldown {
-    pub fn new(ms: u64) -> Self {
-        Self { last: HashMap::new(), cooldown: Duration::from_millis(ms) }
-    }
-
-    /// 該頻道已過冷卻時間回傳 true 並記錄時間。
-    pub fn allow(&mut self, label: u8) -> bool {
-        let now = Instant::now();
-        if let Some(t) = self.last.get(&label) {
-            if now.duration_since(*t) < self.cooldown {
-                return false;
-            }
-        }
-        self.last.insert(label, now);
         true
     }
 }
@@ -118,15 +93,6 @@ mod tests {
         assert!(!lru.insert_if_new(1));
         assert!(lru.insert_if_new(3)); // 塞入 3 之後 1 被擠出
         assert!(lru.insert_if_new(1));
-    }
-
-    #[test]
-    fn channel_cooldown_is_per_channel() {
-        let mut cd = ChannelCooldown::new(60_000);
-        assert!(cd.allow(0));
-        assert!(!cd.allow(0));
-        // 另一個頻道不受影響。
-        assert!(cd.allow(1));
     }
 
     #[test]
