@@ -1,6 +1,6 @@
 [package]
 name = "mushroom-chat-helper"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "蘑菇聊天小幫手:新楓之谷畫面擷取 + 依文字顏色分類頻道,直接顯示對話截圖"
 
@@ -8,15 +8,23 @@ description = "蘑菇聊天小幫手:新楓之谷畫面擷取 + 依文字顏色�
 anyhow = "1"
 chrono = "0.4"
 crossbeam-channel = "0.5"
-# 算繪後端固定用 glow(OpenGL),不要換成 wgpu:wgpu 在 Windows 上會挑 Vulkan,
-# NVIDIA App / GOG Galaxy 這類疊圖軟體就會把本程式當成遊戲勾住,把 FPS/溫度 OSD
-# 畫到聊天視窗上 —— 本程式自己就是要疊在遊戲上的疊圖層,被別人疊回來等於毀掉用途。
+# 算繪後端用 eframe 預設的 wgpu。選它是為了驅動相容性,不是效能:
+# 使用者的顯卡我們控制不了,而 OpenGL 在 Windows 上是二等公民(微軟不維護,
+# 全靠各家 IHV 自己實作,AMD/Intel 的 GL 驅動品質歷來不如 NVIDIA)。
+# wgpu 的預設 backends 是 PRIMARY | GL,會依序試 DX12 / Vulkan,失敗才退回 GL
+# —— 等於把原本的 glow 路徑保留成最後一道 fallback,再往上疊兩層一線支援的後端;
+# 挑 adapter 時也會優先選獨顯,glow 沒有這層邏輯。
+# 代價是 release exe 從 12.9 MB 漲到約 19.2 MB,以及建 device + 編 shader 的
+# 冷啟動成本。本程式閒置只有 4 FPS、材質也只在新訊息時上傳,算繪負載趨近於零,
+# 兩者的執行期效能差異量不出來,所以這個交換是划算的。
+# 使用者要指定後端可以設環境變數 WGPU_BACKEND=dx12|vulkan|gl。
+# 若哪天要換回 glow,記得 on_exit 的簽名會多一個 glow context 參數。
 eframe = { version = "0.36", default-features = false, features = [
     "accesskit",
     "default_fonts",
-    "glow",
     "links",
     "wayland",
+    "wgpu",
     "x11",
 ] }
 egui = "0.36"
