@@ -428,8 +428,8 @@ impl eframe::App for App {
         self.ui_screen_picker(ctx);
     }
 
-    // 0.36 的預設後端從 glow 換成 wgpu,on_exit 也就不再收 glow context。
-    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+    // 用 wgpu 後端,on_exit 不收 glow context(glow 那版簽名會多一個參數)。
+    fn on_exit(&mut self) {
         config::save(&self.cfg.read().unwrap());
         let _ = self.cmd_tx.send(CaptureCmd::Shutdown);
         let _ = self.hotkey_tx.send(HotkeyCmd::Shutdown);
