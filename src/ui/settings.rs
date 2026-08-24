@@ -52,6 +52,7 @@ impl super::App {
                         ui.selectable_value(&mut self.tab, Tab::Capture, "🎥 擷取設定");
                         ui.selectable_value(&mut self.tab, Tab::Channels, "🎨 頻道");
                         ui.selectable_value(&mut self.tab, Tab::Views, "📑 檢視管理");
+                        ui.selectable_value(&mut self.tab, Tab::Update, "⬆ 更新");
                         ui.selectable_value(&mut self.tab, Tab::Help, "❓ 說明");
                         ui.separator();
                         if ui
@@ -68,6 +69,7 @@ impl super::App {
                             Tab::Capture => self.ui_capture(ui),
                             Tab::Channels => self.ui_channels(ui),
                             Tab::Views => self.ui_views(ui),
+                            Tab::Update => self.ui_update_tab(ui),
                             Tab::Help => self.ui_help(ui),
                         }
                     });
@@ -691,6 +693,9 @@ impl super::App {
                  ・本工具只讀取畫面,不寫入遊戲、不注入、不自動操作;\n\
                    使用第三方工具仍請自行留意遊戲服務條款",
             );
+            ui.add_space(8.0);
+            ui.label(RichText::new("軟體更新").strong());
+            ui.label("檢查新版本、開關「啟動時自動檢查」都在「⬆ 更新」分頁。");
         });
     }
 }

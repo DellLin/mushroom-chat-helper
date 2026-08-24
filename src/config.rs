@@ -24,7 +24,7 @@ pub struct ViewDef {
 }
 
 /// 聊天區域(視窗內像素座標)。
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Roi {
     pub x: u32,
     pub y: u32,
@@ -169,7 +169,7 @@ impl Default for RoiMode {
 /// 主畫面判斷範圍(ROI 判斷視窗):偵測目前畫面是否在遊戲主畫面(有聊天視窗)。
 /// 使用者進入商城、拍賣等其他畫面時該範圍內不會出現指定顏色,藉此避免
 /// 持續套用聊天判斷邏輯而在這些畫面上誤判出訊息。
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GateRoi {
     /// 是否啟用主畫面判斷。
@@ -270,6 +270,11 @@ pub struct Config {
     pub window_pos: Option<[f32; 2]>,
     /// 主視窗上次的大小(egui points)。收合成只剩工具列高度時不會覆寫這個值。
     pub window_size: Option<[f32; 2]>,
+    /// 啟動時自動到 GitHub 看有沒有新版本。關掉之後只剩「更新」分頁的手動檢查。
+    pub auto_check_update: bool,
+    /// 使用者按過「略過這個版本」的 tag(例:`v0.3.0`),之後開機不再為它跳提示。
+    /// 手動按「檢查更新」時無視這個值。
+    pub skipped_update_version: Option<String>,
 }
 
 impl Default for Config {
@@ -330,6 +335,8 @@ impl Default for Config {
             // None 表示交給作業系統擺放,使用者搬動/縮放後才寫回設定檔。
             window_pos: None,
             window_size: None,
+            auto_check_update: true,
+            skipped_update_version: None,
         }
     }
 }
