@@ -331,6 +331,8 @@ impl Default for Config {
                 ch("guild", "公會", [224, 171, 252], 20, true),
                 ch("system", "系統", [255, 175, 175], 20, true),
                 ch("mega", "廣播", [119, 0, 66], 20, true),
+                ch("yellomega", "黃廣", [70, 39, 6], 4, true),
+                ch("post", "公告", [255, 255, 0], 10, true),
             ],
             views: vec![
                 ViewDef {
