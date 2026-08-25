@@ -27,8 +27,6 @@
 `mushroom-chat-helper-vX.Y.Z-windows-x64.zip`,解壓縮後直接執行裡面的 exe,不用安裝。
 只想要執行檔的話也可以單獨下載 `mushroom-chat-helper.exe`(附 `.sha256` 可驗證)。
 
-裝好之後不用再回來這裡:程式會自己檢查新版本,見 [USAGE.md](USAGE.md) 的「自動更新」。
-
 ## 快速上手
 
 1. 開好遊戲、展開聊天視窗,啟動本程式
