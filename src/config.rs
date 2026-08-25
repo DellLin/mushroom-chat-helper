@@ -42,14 +42,16 @@ pub enum ResolutionPreset {
     R1366x768,
     R1920x1080,
     R2560x1440,
+    R2732x1536,
     R3840x2160,
 }
 
 impl ResolutionPreset {
-    pub const ALL: [ResolutionPreset; 4] = [
+    pub const ALL: [ResolutionPreset; 5] = [
         ResolutionPreset::R1366x768,
         ResolutionPreset::R1920x1080,
         ResolutionPreset::R2560x1440,
+        ResolutionPreset::R2732x1536,
         ResolutionPreset::R3840x2160,
     ];
 
@@ -58,6 +60,7 @@ impl ResolutionPreset {
             ResolutionPreset::R1366x768 => "1366 x 768",
             ResolutionPreset::R1920x1080 => "1920 x 1080",
             ResolutionPreset::R2560x1440 => "2560 x 1440",
+            ResolutionPreset::R2732x1536 => "2732 x 1536",
             ResolutionPreset::R3840x2160 => "3840 x 2160",
         }
     }
@@ -67,6 +70,7 @@ impl ResolutionPreset {
             ResolutionPreset::R1366x768 => (1366, 768),
             ResolutionPreset::R1920x1080 => (1920, 1080),
             ResolutionPreset::R2560x1440 => (2560, 1440),
+            ResolutionPreset::R2732x1536 => (2732, 1536),
             ResolutionPreset::R3840x2160 => (3840, 2160),
         }
     }
@@ -83,6 +87,7 @@ impl ResolutionPreset {
             ResolutionPreset::R1366x768 => CHAT_ROI_1366X768,
             ResolutionPreset::R1920x1080 => CHAT_ROI_1920X1080,
             ResolutionPreset::R2560x1440 => CHAT_ROI_2560X1440,
+            ResolutionPreset::R2732x1536 => CHAT_ROI_2732X1536,
             ResolutionPreset::R3840x2160 => CHAT_ROI_3840X2160,
         }
     }
@@ -93,6 +98,7 @@ impl ResolutionPreset {
             ResolutionPreset::R1366x768 => GATE_ROI_1366X768,
             ResolutionPreset::R1920x1080 => GATE_ROI_1920X1080,
             ResolutionPreset::R2560x1440 => GATE_ROI_2560X1440,
+            ResolutionPreset::R2732x1536 => GATE_ROI_2732X1536,
             ResolutionPreset::R3840x2160 => GATE_ROI_3840X2160,
         }
     }
@@ -135,6 +141,20 @@ const GATE_ROI_2560X1440: Roi = Roi {
     y: 1380,
     w: 85,
     h: 55,
+};
+
+const CHAT_ROI_2732X1536: Roi = Roi {
+    x: 621,
+    y: 1398,
+    w: 1026,
+    h: 28,
+};
+// 主畫面判斷 ROI 尚未實測,先留空(全 0)。
+const GATE_ROI_2732X1536: Roi = Roi {
+    x: 0,
+    y: 0,
+    w: 0,
+    h: 0,
 };
 
 // 尚未實測,先留空(全 0)。
@@ -185,7 +205,7 @@ pub struct GateRoi {
 impl Default for GateRoi {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,
             roi: GATE_ROI_2560X1440,
             color: [204, 0, 34],
             tolerance: 30,
