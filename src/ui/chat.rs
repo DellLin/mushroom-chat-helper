@@ -27,6 +27,7 @@ impl super::App {
         self.ensure_window_reachable(&ctx);
         self.sync_gate_visibility(&ctx);
         self.ui_banners(ui);
+        self.ui_quit_confirm(&ctx);
 
         // 主視窗永遠只顯示聊天,大小/字級才能貼著遊戲聊天視窗調整、疊上去用。
         // 所有設定都收在另一個獨立的作業系統視窗裡,按 ⚙ 才會打開。
@@ -41,9 +42,11 @@ impl super::App {
             egui::CentralPanel::default().show(ui, |ui| self.ui_chat_messages(ui));
         }
 
-        // 主視窗無邊框,少了系統內建的邊緣拖曳縮放,補上手動的邊框/角落感應區。
-        // 鎖定時不裝這些感應區,滑鼠移過去也不會顯示縮放游標,明確表示目前不能調整。
+        // 主視窗無邊框,沒有系統內建的拖曳/邊緣縮放,兩者都在這裡補上。鎖定時
+        // 兩者都不裝:拖曳感應區拿掉,滑鼠移到邊緣也不會顯示縮放游標,明確表示
+        // 目前不能調整視窗。
         if !self.window_locked {
+            install_background_drag(&ctx);
             install_resize_border(&ctx);
         }
     }
@@ -191,19 +194,6 @@ impl super::App {
         };
 
         ui.horizontal_wrapped(|ui| {
-            // 沒有工具列可以拖曳視窗了,改成這一列背景可以拖曳。先佔滿整列的感應區,
-            // 之後加入的按鈕/輸入框仍會在自己的範圍內優先接收點擊,不影響操作。
-            let row_height = ui.spacing().interact_size.y.max(22.0);
-            let drag_rect = egui::Rect::from_min_size(
-                ui.cursor().min,
-                egui::vec2(ui.available_width(), row_height),
-            );
-            let drag_resp =
-                ui.interact(drag_rect, ui.id().with("chat_toolbar_drag"), egui::Sense::drag());
-            if drag_resp.drag_started() && !self.window_locked {
-                ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
-            }
-
             let all_hover = match all_view_mode {
                 AllViewMode::HideChat => "會直接隱藏下方內容,透出遊戲原本的聊天視窗(可到「檢視管理」改成顯示全部對話)",
                 AllViewMode::ShowMessages => "顯示擷取到的全部對話截圖,不套用頻道過濾",
@@ -262,7 +252,43 @@ impl super::App {
             if ui.button(lock_icon).on_hover_text(lock_hover).clicked() {
                 self.window_locked = !self.window_locked;
             }
+            ui.separator();
+            if ui
+                .button(RichText::new("X").color(Color32::LIGHT_RED))
+                .on_hover_text("結束應用程式")
+                .clicked()
+            {
+                self.quit_confirm = true;
+            }
         });
+    }
+
+    /// 結束應用程式前的確認提示。按鈕就在工具列上,跟「清空訊息」相鄰,
+    /// 直接送出關閉指令太容易被滑鼠移動路徑上的誤觸點到——多這一步確認。
+    /// 用 egui::Modal(有背景遮罩、擋掉底下工具列的點擊)而不是普通 Window,
+    /// 避免使用者在確認提示還開著時繼續操作主視窗。
+    fn ui_quit_confirm(&mut self, ctx: &egui::Context) {
+        if !self.quit_confirm {
+            return;
+        }
+        let resp = egui::Modal::new(egui::Id::new("quit_confirm")).show(ctx, |ui| {
+            ui.set_max_width(240.0);
+            ui.label("確定要結束應用程式嗎?");
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui.button("取消").clicked() {
+                    self.quit_confirm = false;
+                }
+                if ui.button(RichText::new("結束").color(Color32::LIGHT_RED)).clicked() {
+                    self.quit_requested = true;
+                }
+            });
+        });
+        if resp.backdrop_response.clicked()
+            || ctx.input(|i| i.key_pressed(egui::Key::Escape))
+        {
+            self.quit_confirm = false;
+        }
     }
 
     /// 訊息列表:直接顯示每則訊息擷取到的畫面截圖(不做 OCR)。選「全部」且設定為
@@ -317,6 +343,24 @@ impl super::App {
                 }
             });
     }
+}
+
+/// 無邊框視窗補上「按住背景拖曳整個視窗」——蓋滿整個視窗、疊在最底層
+/// (`Order::Background`)。面板本身不吃滑鼠事件,只有真的呼叫過 Sense 的
+/// 元件(按鈕、捲軸、下面的縮放感應區)才會蓋過這一層搶到點擊,所以工具列
+/// 按鈕、訊息列表的捲動都不受影響,只有點在真正的空白背景上才會觸發拖曳。
+fn install_background_drag(ctx: &egui::Context) {
+    let screen = ctx.viewport_rect();
+    egui::Area::new(egui::Id::new("chat_bg_drag"))
+        .fixed_pos(screen.min)
+        .order(egui::Order::Background)
+        .interactable(true)
+        .show(ctx, |ui| {
+            let resp = ui.allocate_response(screen.size(), egui::Sense::drag());
+            if resp.drag_started() {
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
+            }
+        });
 }
 
 /// 無邊框視窗補上邊緣/角落拖曳縮放感應區(系統少了內建的視窗邊框可以拖)。
