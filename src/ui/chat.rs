@@ -26,6 +26,18 @@ impl super::App {
         let ctx = ui.ctx().clone();
         self.ensure_window_reachable(&ctx);
         self.sync_gate_visibility(&ctx);
+
+        // 背景拖曳感應區要最先註冊。egui 在同一層(這裡都是 root ui 所在的
+        // background 層)裡用「後註冊的蓋在上層」判斷點擊優先權——如果晚於
+        // 工具列/面板才呼叫,這片蓋滿全視窗的拖曳區反而會蓋掉底下所有按鈕、
+        // 捲軸的點擊(見 issue:整個視窗能拖但按鈕全部點不到)。用 ui.interact
+        // 直接掛在 root ui 上(而不是另開一個 egui::Area)是關鍵:另開 Area
+        // 即使同樣設 Order::Background,也會是一個獨立的 layer,一旦在工具列
+        // 之後才第一次畫出來,就會永遠疊在工具列所在的 background layer 上面。
+        if !self.window_locked {
+            install_background_drag(ui);
+        }
+
         self.ui_banners(ui);
         self.ui_quit_confirm(&ctx);
 
@@ -42,11 +54,9 @@ impl super::App {
             egui::CentralPanel::default().show(ui, |ui| self.ui_chat_messages(ui));
         }
 
-        // 主視窗無邊框,沒有系統內建的拖曳/邊緣縮放,兩者都在這裡補上。鎖定時
-        // 兩者都不裝:拖曳感應區拿掉,滑鼠移到邊緣也不會顯示縮放游標,明確表示
-        // 目前不能調整視窗。
+        // 主視窗無邊框,沒有系統內建的邊緣縮放,這裡補上。鎖定時不裝:滑鼠移到
+        // 邊緣也不會顯示縮放游標,明確表示目前不能調整視窗。
         if !self.window_locked {
-            install_background_drag(&ctx);
             install_resize_border(&ctx);
         }
     }
@@ -345,22 +355,16 @@ impl super::App {
     }
 }
 
-/// 無邊框視窗補上「按住背景拖曳整個視窗」——蓋滿整個視窗、疊在最底層
-/// (`Order::Background`)。面板本身不吃滑鼠事件,只有真的呼叫過 Sense 的
-/// 元件(按鈕、捲軸、下面的縮放感應區)才會蓋過這一層搶到點擊,所以工具列
-/// 按鈕、訊息列表的捲動都不受影響,只有點在真正的空白背景上才會觸發拖曳。
-fn install_background_drag(ctx: &egui::Context) {
-    let screen = ctx.viewport_rect();
-    egui::Area::new(egui::Id::new("chat_bg_drag"))
-        .fixed_pos(screen.min)
-        .order(egui::Order::Background)
-        .interactable(true)
-        .show(ctx, |ui| {
-            let resp = ui.allocate_response(screen.size(), egui::Sense::drag());
-            if resp.drag_started() {
-                ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
-            }
-        });
+/// 無邊框視窗補上「按住背景拖曳整個視窗」——蓋滿整個視窗的拖曳感應區,直接
+/// 掛在呼叫端傳入的 root ui 上(同一個 layer),而不是另開 egui::Area(理由
+/// 見呼叫端註解)。之後才畫的按鈕、捲軸在 egui 的 hit-test 裡都算「疊在這一
+/// 層上面」,會蓋過這片背景搶到點擊,只有點在真正的空白背景上才會觸發拖曳。
+fn install_background_drag(ui: &mut egui::Ui) {
+    let rect = ui.max_rect();
+    let resp = ui.interact(rect, egui::Id::new("chat_bg_drag"), egui::Sense::drag());
+    if resp.drag_started() {
+        ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
+    }
 }
 
 /// 無邊框視窗補上邊緣/角落拖曳縮放感應區(系統少了內建的視窗邊框可以拖)。
