@@ -20,7 +20,7 @@ mod update;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, RwLock};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender};
 
@@ -31,6 +31,11 @@ use crate::model::{CaptureCmd, CaptureState, HotkeyCmd, UiEvent};
 /// 聊天室保留的訊息上限。每則訊息都是一張獨立的 GPU 材質,必須設上限
 /// 避免材質數量隨執行時間無限成長。
 const MAX_MESSAGES: usize = 500;
+
+/// 「目前沒有選到視窗、或選到的視窗已經不存在了」時,重新掃描一次可見視窗
+/// 清單的間隔(見 App::poll_capture_target)。夠短才能感覺到「自動接上」,
+/// 夠長才不會讓 EnumWindows 變成每幀都在跑。
+const WINDOW_SCAN_INTERVAL: Duration = Duration::from_millis(1500);
 
 /// 設定視窗內的分頁(聊天本身不再是分頁,永遠是主視窗內容)。
 #[derive(PartialEq, Clone, Copy)]
@@ -135,6 +140,8 @@ pub struct App {
 
     windows: Vec<WindowInfo>,
     selected_win: Option<(isize, String)>,
+    /// 下一次可以做 poll_capture_target 自動重新掃描的時間點,節流用。
+    next_window_scan: Instant,
     preview: Option<PreviewState>,
     drag_start: Option<egui::Pos2>,
     roi_target: RoiTarget,
@@ -154,6 +161,9 @@ pub struct App {
     font_ok: bool,
     settings_open: bool,
     quit_requested: bool,
+    /// 主視窗工具列按下「X」後,是否正顯示「確定要結束應用程式嗎?」的提示
+    /// (見 chat::ui_quit_confirm)。真正觸發關閉一律經由 quit_requested。
+    quit_confirm: bool,
 
     /// 選「全部」時是否已把視窗收合到只剩工具列高度。
     chat_collapsed: bool,
@@ -200,8 +210,6 @@ impl App {
             (cfg.window_title_hint.clone(), cfg.always_on_top, preset)
         };
         let windows = filtered_windows(&hint);
-        // 視窗標題跟篩選字串完全相符的話,不用等使用者手動選視窗、按開始擷取。
-        let auto_start = windows.iter().find(|w| w.title.trim() == hint.trim()).cloned();
         let mut app = Self {
             cfg: init.cfg,
             interval_ms: init.interval_ms,
@@ -215,6 +223,7 @@ impl App {
             active_view: None,
             windows,
             selected_win: None,
+            next_window_scan: Instant::now(),
             preview: None,
             drag_start: None,
             roi_target: RoiTarget::Chat,
@@ -228,6 +237,7 @@ impl App {
             font_ok,
             settings_open: false,
             quit_requested: false,
+            quit_confirm: false,
             chat_collapsed: false,
             saved_height: 320.0,
             window_locked: false,
@@ -240,10 +250,9 @@ impl App {
             applied_font_px: -1.0,
         };
 
-        if let Some(w) = auto_start {
-            app.selected_win = Some((w.hwnd, w.title.clone()));
-            let _ = app.cmd_tx.send(CaptureCmd::Start { hwnd: w.hwnd, title: w.title });
-        }
+        // 開機時立刻嘗試找一次符合篩選字串的視窗(遊戲比小工具先開的情境不用
+        // 等第一次定時掃描才接上);之後的自動重新掃描見 poll_capture_target。
+        app.poll_capture_target();
 
         app
     }
@@ -355,6 +364,40 @@ impl App {
         }
     }
 
+    /// 每隔 [`WINDOW_SCAN_INTERVAL`] 檢查一次:目前沒有選到視窗,或選到的視窗
+    /// 已經不存在了(遊戲關掉、或還沒開起來),就依篩選字串重新掃描一次可見
+    /// 視窗,找到就自動選取並開始擷取。這樣不論是先開遊戲再開小工具、還是
+    /// 反過來先開小工具再開遊戲,都不必手動到設定裡重新選視窗——遊戲視窗
+    /// 只要還在(selected_win 對應的 hwnd 仍存在),就不會被這裡打斷,使用者
+    /// 主動按「停止擷取」的結果不會被自動搶回來。
+    fn poll_capture_target(&mut self) {
+        let now = Instant::now();
+        if now < self.next_window_scan {
+            return;
+        }
+        self.next_window_scan = now + WINDOW_SCAN_INTERVAL;
+
+        let hint = self.cfg.read().unwrap().window_title_hint.clone();
+        if hint.trim().is_empty() {
+            return;
+        }
+
+        let all = win_enum::list_windows();
+        let still_exists = self
+            .selected_win
+            .as_ref()
+            .is_some_and(|(hwnd, _)| all.iter().any(|w| w.hwnd == *hwnd));
+        if still_exists {
+            return;
+        }
+
+        self.windows = filter_by_hint(all, &hint);
+        if let Some(w) = self.windows.iter().find(|w| w.title.trim() == hint.trim()) {
+            self.selected_win = Some((w.hwnd, w.title.clone()));
+            let _ = self.cmd_tx.send(CaptureCmd::Start { hwnd: w.hwnd, title: w.title.clone() });
+        }
+    }
+
     /// 快捷鍵觸發:循環切換聊天檢視(全部 → 自訂檢視1 → 自訂檢視2 → … → 全部)。
     fn cycle_view(&mut self) {
         let n = self.cfg.read().unwrap().views.len();
@@ -403,6 +446,7 @@ impl eframe::App for App {
         let ctx = ui.ctx().clone();
         let ctx = &ctx;
         self.drain_events(ctx);
+        self.poll_capture_target();
         ctx.request_repaint_after(std::time::Duration::from_millis(250));
 
         // 三個 viewport 都掛在同一個 egui::Context 底下,樣式是 Context 全域
@@ -437,8 +481,14 @@ impl eframe::App for App {
 }
 
 fn filtered_windows(hint: &str) -> Vec<WindowInfo> {
+    filter_by_hint(win_enum::list_windows(), hint)
+}
+
+/// 把 `all` 裡標題含有篩選字串的視窗排到前面(不符合的仍保留在後面,
+/// 篩選字串為空就完全不重排),而不是直接丟掉——沒精準比對到時使用者
+/// 仍能在下拉選單手動選到其他視窗。
+fn filter_by_hint(mut all: Vec<WindowInfo>, hint: &str) -> Vec<WindowInfo> {
     let hint = hint.to_lowercase();
-    let mut all = win_enum::list_windows();
     if !hint.is_empty() {
         let (matched, rest): (Vec<_>, Vec<_>) = all
             .into_iter()
