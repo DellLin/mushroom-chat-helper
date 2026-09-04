@@ -1,6 +1,6 @@
 //! 設定視窗:按 ⚙ 開出來的獨立 OS 視窗,內含四個分頁。
 //!
-//! 這是唯一能完全關閉程式的地方——主視窗沒有關閉鈕。
+//! 結束應用程式的按鈕在主視窗工具列上(見 chat.rs),不在這裡。
 
 use std::sync::atomic::Ordering;
 
@@ -54,13 +54,6 @@ impl super::App {
                         ui.selectable_value(&mut self.tab, Tab::Views, "📑 檢視管理");
                         ui.selectable_value(&mut self.tab, Tab::Update, "⬆ 更新");
                         ui.selectable_value(&mut self.tab, Tab::Help, "❓ 說明");
-                        ui.separator();
-                        if ui
-                            .button(RichText::new("⏻ 結束應用程式").color(Color32::LIGHT_RED))
-                            .clicked()
-                        {
-                            self.quit_requested = true;
-                        }
                     });
                 });
                 egui::CentralPanel::default().show(ui, |ui| {
