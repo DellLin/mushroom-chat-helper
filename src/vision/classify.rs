@@ -115,21 +115,30 @@ impl LabelStats {
     }
 }
 
-/// 用分類結果建出一張二值遮罩,只保留 `target` 這個頻道文字顏色命中的像素
-/// (其餘一律當背景剔除),打包成 bit 陣列供逐像素比對用。完全不看背景像素——
-/// 半透明聊天背景後方的遊戲畫面移動再劇烈,只要文字本身沒變,遮罩就不會變。
+/// 去重用的遮罩:直接拿原始像素跟「已經判定出來的單一頻道」顏色比對,打包成
+/// bit 陣列供逐像素比對用,完全不看背景像素——半透明聊天背景後方的遊戲畫面
+/// 移動再劇烈,只要文字本身沒變,遮罩就不會變。
 ///
-/// 只保留單一頻道(而不是「任何頻道都算命中」),是因為同一個 ROI 位置偶爾會
-/// 殘留別的頻道的雜色,那些跟這則訊息無關的像素會稀釋掉真正的比對訊號。
+/// 刻意用完整容差(`tolerance`),不是 `Palette::match_px` 分類時縮小過的核心
+/// 容差:核心容差縮小是為了在多個頻道顏色相近時分辨誰是誰(見 CORE_TOL_MUL
+/// 說明),但這裡已經由呼叫端決定好是哪個頻道了,不需要再跟其他頻道的顏色
+/// 比賽。半透明聊天背景會讓同一顆字的顏色隨背後畫面(玩家移動、背景特效)
+/// 小幅偏移,核心容差往往窄到連文字實心的部分都會被推出範圍,導致同一則
+/// 訊息在畫面間被誤判成內容變了、反覆重新顯示;完整容差才禁得起這種偏移。
 ///
 /// 刻意保留完整的 2D 形狀(不把整個 ROI 高度壓成一維水平投影),因為短訊息、
 /// 或字數相同的連續訊息,用密度投影區分不出內容差異(不同文字的筆劃形狀差很
 /// 多,但每欄的命中比例可能剛好相近)。ROI 固定框住同一個螢幕位置,同一畫面
 /// 重複擷取時垂直對齊本來就很穩定,不需要犧牲 y 軸解析度來換取容錯。
-pub fn channel_mask_bits(labels: &[u8], target: u8) -> Vec<u64> {
-    let mut bits = vec![0u64; labels.len().div_ceil(64)];
-    for (i, &l) in labels.iter().enumerate() {
-        if l == target {
+pub fn dedup_mask_bits(rgba: &[u8], color: [u8; 3], tolerance: u8) -> Vec<u64> {
+    let t = tolerance as i32;
+    let chunks = rgba.as_chunks::<4>().0;
+    let mut bits = vec![0u64; chunks.len().div_ceil(64)];
+    for (i, px) in chunks.iter().enumerate() {
+        let dr = px[0] as i32 - color[0] as i32;
+        let dg = px[1] as i32 - color[1] as i32;
+        let db = px[2] as i32 - color[2] as i32;
+        if dr.abs() <= t && dg.abs() <= t && db.abs() <= t {
             bits[i / 64] |= 1u64 << (i % 64);
         }
     }
@@ -158,51 +167,58 @@ pub fn mask_similarity(a: &[u64], b: &[u64]) -> f32 {
 mod tests {
     use super::*;
 
-    /// 在 w x h 的標記陣列裡,把 [x0,x1) 這段欄位全標成命中指定頻道,其餘保持 NO_LABEL。
-    fn labels_with_hit_columns(w: usize, h: usize, x0: usize, x1: usize, label: u8) -> Vec<u8> {
-        let mut labels = vec![NO_LABEL; w * h];
-        for y in 0..h {
-            for x in x0..x1 {
-                labels[y * w + x] = label;
-            }
+    /// 建一個 n bit 的遮罩,把 [x0,x1) 這段 bit 標成命中,其餘為 0(只給下面
+    /// mask_similarity 測試搭積木用,production code 已改直接對原始像素做
+    /// 去重比對,見 dedup_mask_bits)。
+    fn bits(n: usize, x0: usize, x1: usize) -> Vec<u64> {
+        let mut v = vec![0u64; n.div_ceil(64)];
+        for i in x0..x1 {
+            v[i / 64] |= 1u64 << (i % 64);
         }
-        labels
+        v
     }
 
     #[test]
     fn mask_similarity_low_for_same_length_different_content() {
-        let (w, h) = (100, 20);
-        // 兩則訊息命中的面積(等同「字數」)完全相同,但落在完全不同的位置——
-        // 模擬「字數相同但內容不同」的連續短訊息,保留完整 2D 形狀後相似度應該很低。
-        let a = channel_mask_bits(&labels_with_hit_columns(w, h, 0, 20, 0), 0);
-        let b = channel_mask_bits(&labels_with_hit_columns(w, h, 80, 100, 0), 0);
+        // 兩則訊息命中的 bit 數(等同「字數」)完全相同,但完全不重疊——
+        // 模擬「字數相同但內容不同」的連續短訊息,相似度應該很低。
+        let a = bits(2000, 0, 20);
+        let b = bits(2000, 1600, 1620);
         assert!(mask_similarity(&a, &b) < 0.1);
     }
 
     #[test]
     fn mask_similarity_high_for_minor_jitter() {
-        let (w, h) = (100, 20);
-        let a = channel_mask_bits(&labels_with_hit_columns(w, h, 10, 30, 0), 0);
-        // 反鋸齒抖動的模擬:邊界只差 1 欄。
-        let b = channel_mask_bits(&labels_with_hit_columns(w, h, 10, 29, 0), 0);
+        let a = bits(2000, 10, 30);
+        // 反鋸齒抖動的模擬:邊界只差 1 個 bit。
+        let b = bits(2000, 10, 29);
         assert!(mask_similarity(&a, &b) > 0.9);
     }
 
     #[test]
-    fn channel_mask_bits_only_keeps_target_channel() {
-        let (w, h) = (40, 10);
-        let mut labels = vec![NO_LABEL; w * h];
-        for y in 0..h {
-            for x in 0..20 {
-                labels[y * w + x] = 0; // 頻道 0
-            }
-            for x in 20..40 {
-                labels[y * w + x] = 1; // 頻道 1
-            }
-        }
-        let popcount = |v: &[u64]| v.iter().map(|x| x.count_ones()).sum::<u32>();
-        assert_eq!(popcount(&channel_mask_bits(&labels, 0)), (w * h / 2) as u32);
-        assert_eq!(popcount(&channel_mask_bits(&labels, 1)), (w * h / 2) as u32);
+    fn dedup_mask_only_keeps_pixels_within_full_tolerance() {
+        let color = [255u8, 255, 255];
+        #[rustfmt::skip]
+        let rgba = [
+            250, 250, 250, 255, // 容差 20 以內 → 命中
+            180, 180, 180, 255, // 超出容差 → 不命中
+        ];
+        let mask = dedup_mask_bits(&rgba, color, 20);
+        assert_eq!(mask[0] & 0b11, 0b01);
+    }
+
+    /// 這是這個函式存在的理由:半透明聊天背景造成的顏色偏移常常超過
+    /// `Palette::match_px` 用的核心容差(CORE_TOL_MUL 縮小過),但去重不需要
+    /// 分辨頻道,用完整容差仍然要能命中,遮罩才不會因為背景變動而跳動。
+    #[test]
+    fn dedup_mask_survives_a_shift_beyond_core_tolerance() {
+        let color = [255u8, 255, 255];
+        let tol = 20u8;
+        let core_tol = (tol as f32 * CORE_TOL_MUL) as i32; // 11
+        let shifted = 255 - (core_tol + 3); // 超出核心容差,但仍在完整容差內
+        let rgba = [shifted as u8, shifted as u8, shifted as u8, 255];
+        let mask = dedup_mask_bits(&rgba, color, tol);
+        assert_eq!(mask[0] & 1, 1);
     }
 
     #[test]

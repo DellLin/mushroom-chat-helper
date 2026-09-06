@@ -15,7 +15,7 @@ use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
 use crate::config::{Config, GateRoi, Roi};
 use crate::model::{ChatImage, FramePacket, UiEvent};
 
-use classify::{channel_mask_bits, label_pixels, LabelStats, Palette};
+use classify::{dedup_mask_bits, label_pixels, LabelStats, Palette};
 use dedup::{ImageDedup, LruSet};
 
 /// 送到 UI 的全視窗預覽最大寬度(等比縮小)。
@@ -209,14 +209,18 @@ fn run(
         // ROI 只框住單一則對話,所以只需要判斷「這次擷取到的畫面跟上一次是不是
         // 同一則」——把畫面依「這則訊息所屬頻道」的文字顏色過濾成二值遮罩,再用
         // 像素級的交集/聯集比例(IoU)模糊比對,避免同一則訊息因背景抖動重新
-        // 觸發而在聊天室裡重複顯示。特意不用 rgba 原始像素比對,因為那包含會
-        // 一直變動的半透明背景,會讓靜止不動的文字被誤判成新內容。命中像素太
-        // 少(雜訊)時直接跳過比對一律放行,避免長期累積的背景雜訊被反覆判定
-        // 成「同一則」而擋掉真正的新訊息。
-        if stats.total >= MIN_DEDUP_PIXELS
-            && !image_dedup.check_and_insert(channel_mask_bits(&labels, dom as u8))
-        {
-            continue;
+        // 觸發而在聊天室裡重複顯示。直接對 rgba 原始像素、用該頻道的完整容差
+        // 比對(而不是重用 labels 的核心容差):分類時縮小容差是為了在多個頻道
+        // 顏色相近時分辨誰是誰,但這裡已經知道是哪個頻道了,不需要再跟其他顏色
+        // 比賽——半透明聊天背景造成的顏色偏移(玩家移動、背景特效)常常超過核心
+        // 容差,只有完整容差才禁得起這種偏移,不會把靜止不動的文字誤判成新內容。
+        // 命中像素太少(雜訊)時直接跳過比對一律放行,避免長期累積的背景雜訊被
+        // 反覆判定成「同一則」而擋掉真正的新訊息。
+        if stats.total >= MIN_DEDUP_PIXELS {
+            let ch = &cfg_snap.channels[palette.entries[dom].0];
+            if !image_dedup.check_and_insert(dedup_mask_bits(&rgba, ch.color, ch.tolerance)) {
+                continue;
+            }
         }
 
         let _ = ui_tx.send(UiEvent::Message(ChatImage {

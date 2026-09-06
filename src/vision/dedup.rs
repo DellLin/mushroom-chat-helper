@@ -40,7 +40,7 @@ impl LruSet {
 const SIMILARITY_THRESHOLD: f32 = 0.55;
 
 /// 畫面去重:新畫面只跟「前一筆」畫面比對是不是同一則訊息(見
-/// classify::channel_mask_bits),不維護一段時間窗內的多筆歷史紀錄。
+/// classify::dedup_mask_bits),不維護一段時間窗內的多筆歷史紀錄。
 ///
 /// ROI 只框住單一則對話,每次擷取範圍裡最多只有一則訊息,只要問「這一次擷取
 /// 到的畫面,跟上一次是不是同一則」就夠了。遮罩只保留該訊息所屬頻道的文字
